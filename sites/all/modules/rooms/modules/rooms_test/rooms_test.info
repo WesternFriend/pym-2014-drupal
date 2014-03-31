@@ -1,0 +1,17 @@
+name = Rooms Test
+description = Provide Rooms Tests
+core = 7.x
+
+package = Rooms
+
+version = 1.x-dev
+
+dependencies[] = rooms_unit
+dependencies[] = rooms_booking
+
+; Information added by drupal.org packaging script on 2013-05-09
+version = "7.x-1.0"
+core = "7.x"
+project = "rooms"
+datestamp = "1368114620"
+
