@@ -27,8 +27,6 @@ class UnitCalendar {
    * @param $events
    *    The events to remove from the database - an array of Booking Events
    *
-   * @return
-   *   The array of ids of events that were found and removed
    */
   public function removeEvents($events) {
 
@@ -61,7 +59,7 @@ class UnitCalendar {
    * @param $states
    * The states we are interested in
    *
-   * @return
+   * @return Boolean
    * Returns true if the date range provided does not have states other than the ones we are
    * interested in
    */
@@ -159,8 +157,9 @@ class UnitCalendar {
 
 
   /**
-   * Given a date range it returns all data within that range including the start and
-   * end dates of states. The MySQL queries are kept simple and then the data is cleared up
+   * Given a date range it returns all data within that range including the
+   * start and end dates of states. The MySQL queries are kept simple and then
+   * the data is cleared up.
    *
    * @param $start_date
    * The starting date
@@ -365,14 +364,15 @@ class UnitCalendar {
    * when the event id is in the rooms_booking_locks table and the new event_id
    * is not the same as the one that is locked.
    *
-   * @param int $existing_state - The state to check if locked
+   * @param BookingEvent $event
+   *   The event to check if it is blocked.
    *
-   * @param int $new_state - The state we want to move to
-   *
-   * @return boolean TRUE if not blocked
+   * @return boolean
+   *   TRUE if blocked.
    */
-  public function eventBlocked($existing_state, $new_state) {
+  public function eventBlocked($event) {
 
+    $states = $this->getStates($event->start_date, $event->end_date);
     $blocked = FALSE;
 
     // Query the locks table to see if event is blocked
@@ -381,11 +381,11 @@ class UnitCalendar {
     $query->addField('l', 'state');
     $query->addField('l', 'locked');
     $query->condition('l.unit_id', $this->unit_id);
-    $query->condition('l.state', $existing_state);
+    $query->condition('l.state', $states);
     $query->condition('l.locked', 1);
     $result = $query->execute()->fetchAll(PDO::FETCH_ASSOC);
     // Only block if we are trying to update an event that is not locked
-    if ((count($result) > 0) && $result[0]['state'] != $new_state) {
+    if ((count($result) > 0) && $result[0]['state'] != $event->id) {
       $blocked = TRUE;
     }
     return $blocked;
@@ -397,30 +397,21 @@ class UnitCalendar {
    * events that are relevant to the Unit this calendar refers to
    *
    * @param $events
-   * An array of events to update the calendar with
+   *   An array of events to update the calendar with
    *
-   * @return array - An array of response on whether event updates were succesful or not
+   * @return array
+   *   An array of response on whether event updates were successful or not
    */
   public function updateCalendar(array $events) {
-
-    $responses = array();
+    $response = array();
     // First check that none of the events supplied are blocked by an existing event with a locked status
     $monthly_events = array();
 
     foreach ($events as $event) {
       // Make sure event refers to the unit for this calendar
       if ($event->unit_id == $this->unit_id) {
-
         // Check if event is not blocked by a locked event
-        $states = $this->getStates($event->start_date, $event->end_date);
-        $blocked = FALSE;
-        foreach ($states as $state) {
-          if ($this->eventBlocked($state, $event->id)) {
-            $blocked = TRUE;
-          }
-        }
-
-        if (!$blocked) {
+        if (!$this->eventBlocked($event)) {
           // If the event is in the same month span just queue to be added
           if ($event->sameMonth()) {
             $monthly_events[] = $event;
@@ -491,7 +482,6 @@ class UnitCalendar {
         'month' => $event->startMonth(),
       );
       $month_row = array_merge($month_row, $days);
-
       $insert = db_insert('rooms_availability')->fields($month_row);
       $insert->execute();
     }

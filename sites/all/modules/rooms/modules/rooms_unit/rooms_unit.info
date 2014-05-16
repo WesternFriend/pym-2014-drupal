@@ -1,5 +1,5 @@
 name = Rooms Unit
-description = Create and manage bookable units (e.g. rooms)
+description = Create and manage bookable units (e.g. rooms).
 core = 7.x
 
 package = Rooms
@@ -10,6 +10,7 @@ dependencies[] = rooms
 dependencies[] = rooms_ui
 dependencies[] = entity
 dependencies[] = views
+dependencies[] = image
 
 
 files[] = rooms_unit.admin.inc
@@ -20,12 +21,13 @@ files[] = views/rooms_unit_handler_delete_link_field.inc
 files[] = views/rooms_unit_handler_edit_link_field.inc
 files[] = views/rooms_unit_handler_unit_operations_field.inc
 files[] = views/rooms_unit_handler_unit_type_field.inc
+files[] = rooms_unit.migrate.inc
 
 files[] = test/rooms_unit_test.test
 
-; Information added by drupal.org packaging script on 2013-05-09
-version = "7.x-1.0"
+; Information added by Drupal.org packaging script on 2014-04-17
+version = "7.x-1.1"
 core = "7.x"
 project = "rooms"
-datestamp = "1368114620"
+datestamp = "1397749144"
 

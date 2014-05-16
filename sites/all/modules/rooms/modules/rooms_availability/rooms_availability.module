@@ -6,51 +6,9 @@
  * plugin
  */
 
-/**
- * The default path to the FullCalendar plugin.
- */
-define('ROOMS_FC_PATH', 'sites/all/libraries/fullcalendar/fullcalendar');
-
-/**
- * The minimum supported version of the FullCalendar plugin.
- */
-define('ROOMS_FC_MIN_PLUGIN_VERSION', '1.4.10');
 
 define('ROOMS_AVAILABILITY_ADMIN_STYLE', 1);
 define('ROOMS_AVAILABILITY_GENERIC_STYLE', 2);
-
-
-/**
- * Implements hook_library().
- */
-function rooms_availability_library() {
-  $libraries['rooms_fullcalendar'] = array(
-    'title' => 'Rooms FullCalendar',
-    'website' => 'http://arshaw.com/fullcalendar',
-    'version' => ROOMS_FC_MIN_PLUGIN_VERSION,
-    'js' => array(
-      rooms_availability_fullcalendar_get_js_path() => array(),
-      variable_get('rooms_fc_path', ROOMS_FC_PATH) . '/gcal.js' => array(),
-    ),
-    'css' => array(
-      variable_get('rooms_fc_path', ROOMS_FC_PATH) . '/fullcalendar.css' => array(
-        'type' => 'file',
-        'media' => 'screen',
-      ),
-      drupal_get_path('module', 'rooms_availability') . '/css/fullcalendar.theme.css' => array(
-        'type' => 'file',
-        'media' => 'screen',
-      ),
-    ),
-    'dependencies' => array(
-      array('system', 'ui.draggable'),
-      array('system', 'ui.droppable'),
-      array('system', 'ui.resizable'),
-      array('system', 'effects.highlight'),
-    ),
-  );
-  return $libraries;
-}
 
 
 /**
@@ -59,21 +17,21 @@ function rooms_availability_library() {
 function rooms_availability_permission() {
   $permissions = array(
     'manage booking unit availability' => array(
-      'title' => t('Manage Booking Unit Availability'),
-      'description' => t('Allows users to manage availability settings for Rooms'),
+      'title' => t('Manage unit availability'),
+      'description' => t('Allows users to manage availability settings for Rooms.'),
       'restrict access' => TRUE,
     ),
     'view anonymous availability information' => array(
       'title' => t('View anonymous availability information'),
-      'description' => t('Allow users to view anonymous availability info (especially via availability reference field)'),
+      'description' => t('Allow users to view anonymous availability info (especially via availability reference field).'),
     ),
     'view named availability information' => array(
       'title' => t('View named availability information'),
-      'description' => t('Allow users to view named availability info (especially via availability reference field)'),
+      'description' => t('Allow users to view named availability info (especially via availability reference field).'),
     ),
     'view past availability information' => array(
       'title' => t('View past availability information'),
-      'description' => t('Allow users to view availability info in the past (especially via availability reference field)'),
+      'description' => t('Allow users to view availability info in the past (especially via availability reference field).'),
     ),
   );
   return $permissions;
@@ -87,7 +45,7 @@ function rooms_availability_menu() {
   $items = array();
 
   $items['admin/rooms/units/unit/%availability_unit/availability'] = array(
-    'title' => t('Manage Availability'),
+    'title' => 'Manage Availability',
     'page callback' => 'rooms_availability_page',
     'page arguments' => array(4, 6, 7),
     'access callback' => 'rooms_availability_admin_access',
@@ -98,7 +56,7 @@ function rooms_availability_menu() {
   );
 
   $items['rooms/units/unit/%availability_unit/availability/json/%/%'] = array(
-    'title' => t('Availability Event'),
+    'title' => 'Availability Event',
     'page callback' => 'rooms_availability_event',
     'page arguments' => array(3, 6, 7, 8, 9, 10, 11, 12),
     'access callback' => 'rooms_availability_access',
@@ -108,7 +66,7 @@ function rooms_availability_menu() {
   );
 
   $items['admin/rooms/units/unit/%availability_unit/event'] = array(
-    'title' => t('Event Management'),
+    'title' => 'Event Management',
     'page callback' => 'rooms_availability_event_manager_page',
     'page arguments' => array(4),
     'access callback' => 'rooms_availability_access',
@@ -118,7 +76,7 @@ function rooms_availability_menu() {
   );
 
   $items['admin/rooms/units/bulk_unit_management'] = array(
-    'title' => t('Bulk availability management'),
+    'title' => 'Bulk availability management',
     'page callback' => 'rooms_availability_bulk_unit_management',
     'page arguments' => array(4, 5, 6),
     'access callback' => 'rooms_availability_access',
@@ -128,7 +86,7 @@ function rooms_availability_menu() {
   );
 
   $items['admin/rooms/units/bulk_pricing_management'] = array(
-    'title' => t('Bulk pricing management'),
+    'title' => 'Bulk pricing management',
     'page callback' => 'rooms_availability_bulk_pricing_management',
     'page arguments' => array(4, 5, 6),
     'access callback' => 'rooms_bulk_pricing_access',
@@ -137,14 +95,14 @@ function rooms_availability_menu() {
   );
 
   $items['admin/rooms/select-all-pages-av'] = array(
-    'title' => t('AJAX Select all availability pages callback'),
+    'title' => 'AJAX Select all availability pages callback',
     'type' => MENU_CALLBACK,
     'page callback' => 'rooms_availability_av_ajax_callback',
     'access arguments' => array('view named availability information'),
   );
 
   $items['admin/rooms/select-all-pages-pr'] = array(
-    'title' => t('AJAX Select all pricing pages callback'),
+    'title' => 'AJAX Select all pricing pages callback',
     'type' => MENU_CALLBACK,
     'page callback' => 'rooms_availability_pr_ajax_callback',
     'access arguments' => array('manage booking unit pricing'),
@@ -176,6 +134,8 @@ function rooms_availability_pr_ajax_callback() {
  * interested interval to edit.
  */
 function rooms_availability_bulk_unit_management($year = '', $month = '', $type = 'all', $action = '', $start = '', $end = '') {
+  // Load FullCalendar
+  rooms_fullcalendar_loaded();
 
   // modal includes and style
   rooms_availability_modal_style();
@@ -201,10 +161,6 @@ function rooms_availability_bulk_unit_management($year = '', $month = '', $type 
     if ($page < 0) $page = 0;
   }
 
-  drupal_add_css(drupal_get_path('module', 'rooms_availability') . '/css/rooms_availability.css');
-  drupal_add_library('rooms_availability', 'rooms_fullcalendar');
-  drupal_add_js(drupal_get_path('module', 'rooms_availability') . '/js/rooms_unit_management.js');
-
   $query = db_select('rooms_units', 'n')->fields('n', array('unit_id', 'name'));
   $query2 = db_select('rooms_units', 'n')->fields('n', array('unit_id', 'name'));
   if ($type != 'all') {
@@ -216,17 +172,6 @@ function rooms_availability_bulk_unit_management($year = '', $month = '', $type 
 
   $n_total_row = $query2->countQuery()->execute()->fetchField();
 
-  // Inject settings in javascript that we will use
-  drupal_add_js(array('roomsUnitManagement' => array('roomsNumber' => count($rooms_units))), 'setting');
-  drupal_add_js(array('roomsUnitManagement' => array('currentMonth' => $month)), 'setting');
-  drupal_add_js(array('roomsUnitManagement' => array('currentYear' => $year)), 'setting');
-
-  $filter_month_form = drupal_get_form('rooms_availability_filter_month_form', $month, $year);
-  $output = render($filter_month_form);
-
-  $update_status_form = drupal_get_form('rooms_availability_update_status_form', $month, $year, $type, $rooms_units);
-  $output .= render($update_status_form);
-
   $rooms_id = array();
   foreach ($rooms_units as $value) {
     $rooms_id[] = $value->unit_id;
@@ -234,16 +179,42 @@ function rooms_availability_bulk_unit_management($year = '', $month = '', $type 
 
   // Add pager
   pager_default_initialize($n_total_row, 20);
-  $args = array('quantity' => $n_total_row, 'tags' => array(t('« first'), t('‹ previous'), '', t('next ›'), t('last »')));
-  $output .= theme('pager', $args);
 
-  drupal_add_js(array('roomsUnitManagement' => array('roomsId' => $rooms_id)), 'setting');
-
-  return $output;
+  // Return the full render array.
+  return array(
+    drupal_get_form('rooms_availability_filter_month_form', $month, $year),
+    drupal_get_form('rooms_availability_update_status_form', $month, $year, $type, $rooms_units),
+    array(
+      '#theme' => 'pager',
+      '#quantity' => $n_total_row,
+      '#tags' => array(t('« first'), t('‹ previous'), '', t('next ›'), t('last »'))
+    ),
+    '#attached' => array(
+      'css' => array(drupal_get_path('module', 'rooms_availability') . '/css/rooms_availability.css'),
+      'js' => array(
+        drupal_get_path('module', 'rooms_availability') . '/js/rooms_unit_management.js',
+        array(
+          'data' => array(
+            'roomsUnitManagement' => array(
+              'roomsNumber' => count($rooms_units),
+              'currentMonth' => $month,
+              'currentYear' => $year,
+              'roomsId' => $rooms_id
+            ),
+          ),
+          'type' => 'setting',
+        )
+      )
+    )
+  );
 }
 
-
+/**
+ * Page callback for Bulk Pricing Management.
+ */
 function rooms_availability_bulk_pricing_management($year = '', $month = '', $type = 'all', $action = '', $start = '', $end = '') {
+  // Load FullCalendar and relevant js/css
+  rooms_fullcalendar_loaded();
 
   // If year is not set then give it the current date
   $year = ($year == '') ? date('Y', time()) : $year;
@@ -268,10 +239,6 @@ function rooms_availability_bulk_pricing_management($year = '', $month = '', $ty
     if ($page < 0) $page = 0;
   }
 
-  drupal_add_css(drupal_get_path('module', 'rooms_availability') . '/css/rooms_availability.css');
-  drupal_add_library('rooms_availability', 'rooms_fullcalendar');
-  drupal_add_js(drupal_get_path('module', 'rooms_availability') . '/js/rooms_pricing_management.js');
-
   $query = db_select('rooms_units', 'n')->fields('n', array('unit_id', 'name'));
   $query2 = db_select('rooms_units', 'n')->fields('n', array('unit_id', 'name'));
   if ($type != 'all') {
@@ -283,17 +250,6 @@ function rooms_availability_bulk_pricing_management($year = '', $month = '', $ty
 
   $n_total_row = $query2->countQuery()->execute()->fetchField();
 
-  // Inject settings in javascript that we will use
-  drupal_add_js(array('roomsUnitManagement' => array('roomsNumber' => count($rooms_units))), 'setting');
-  drupal_add_js(array('roomsUnitManagement' => array('currentMonth' => $month)), 'setting');
-  drupal_add_js(array('roomsUnitManagement' => array('currentYear' => $year)), 'setting');
-
-  $filter_month_form = drupal_get_form('rooms_availability_filter_month_form', $month, $year);
-  $output = render($filter_month_form);
-
-  $pricing_update_form = drupal_get_form('rooms_availability_pricing_update_form', $month, $year, $type, $rooms_units);
-  $output .= render($pricing_update_form);
-
   $rooms_id = array();
   foreach ($rooms_units as $value) {
     $rooms_id[] = $value->unit_id;
@@ -301,16 +257,41 @@ function rooms_availability_bulk_pricing_management($year = '', $month = '', $ty
 
   // Add pager
   pager_default_initialize($n_total_row, 20);
-  $args = array('quantity' => $n_total_row,'tags' => array(t('« first'), t('‹ previous'), '', t('next ›'), t('last »')));
-  $output .= theme('pager', $args);
 
-  drupal_add_js(array('roomsUnitManagement' => array('roomsId' => $rooms_id)), 'setting');
-
-  return $output;
+  // Return the full render array.
+  return array(
+    drupal_get_form('rooms_availability_filter_month_form', $month, $year),
+    drupal_get_form('rooms_availability_pricing_update_form', $month, $year, $type, $rooms_units),
+    array(
+      '#theme' => 'pager',
+      '#quantity' => $n_total_row,
+      '#tags' => array(t('« first'), t('‹ previous'), '', t('next ›'), t('last »'))
+    ),
+    '#attached' => array(
+      'css' => array(drupal_get_path('module', 'rooms_availability') . '/css/rooms_availability.css'),
+      'js' => array(
+        drupal_get_path('module', 'rooms_availability') . '/js/rooms_pricing_management.js',
+        array(
+          'data' => array(
+            'roomsUnitManagement' => array(
+              'roomsNumber' => count($rooms_units),
+              'currentMonth' => $month,
+              'currentYear' => $year,
+              'roomsId' => $rooms_id
+            ),
+          ),
+          'type' => 'setting',
+        )
+      )
+    )
+  );
 }
 
 
 function rooms_availability_filter_month_form($form, &$form_state, $month, $year) {
+
+  $form['#attributes']['class'][] = 'rooms-management-form rooms-filter-month-form';
+
   $month_options = array(
     1 => t('January'),
     2 => t('February'),
@@ -327,7 +308,7 @@ function rooms_availability_filter_month_form($form, &$form_state, $month, $year
   );
 
   $form['rooms_availability_filter_month']['month'] = array(
-    '#title' => t("Month"),
+    '#title' => t('Month'),
     '#type' => 'select',
     '#options' => $month_options,
     '#default_value' => $month,
@@ -336,7 +317,7 @@ function rooms_availability_filter_month_form($form, &$form_state, $month, $year
   $year_options = range(date('Y', time()) - 2, date('Y', time()) + 5);
 
   $form['rooms_availability_filter_month']['year'] = array(
-    '#title' => t("Year"),
+    '#title' => t('Year'),
     '#type' => 'select',
     '#options' => $year_options,
     '#default_value' => $year - date('Y', time()) + 2,
@@ -351,7 +332,7 @@ function rooms_availability_filter_month_form($form, &$form_state, $month, $year
   }
 
   $form['rooms_availability_filter_month']['type'] = array(
-    '#title' => t("Type"),
+    '#title' => t('Type'),
     '#type' => 'select',
     '#options' => $type_options,
     '#default_value' => (arg(6) == '') ? 'all' : arg(6),
@@ -398,7 +379,7 @@ function rooms_availability_filter_month_form_submit(&$form, &$form_state) {
     else $address .= $type . arg(7);
   }
 
-  drupal_goto($address);
+  $form_state['redirect'] = $address;
 }
 
 /**
@@ -407,9 +388,13 @@ function rooms_availability_filter_month_form_submit(&$form, &$form_state) {
  * @see rooms_availability_bulk_pricing_management()
  */
 function rooms_availability_pricing_update_form($form, &$form_state, $month, $year, $type, $rooms_units) {
-    $form['rooms_pricing_update'] = array(
+
+  $form['#attributes']['class'][] = 'rooms-management-form rooms-bulk-pricing-form';
+
+  $form['rooms_pricing_update'] = array(
     '#type' => 'fieldset',
     '#title' => t('Update Pricing'),
+    '#description' => t('Apply a pricing adjustment in bulk to the units selected below for the specified date range.'),
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
   );
@@ -446,22 +431,14 @@ function rooms_availability_pricing_update_form($form, &$form_state, $month, $ye
   );
 
   $form['rooms_pricing_update']['op'] = array(
-    '#title' => t('Operation'),
     '#type' => 'fieldset',
-    '#collapsible' => TRUE,
-    '#collapsed' => FALSE,
   );
 
+  $price_options = rooms_price_options_options();
   $form['rooms_pricing_update']['op']['operation'] = array(
     '#type' => 'select',
     '#title' => t('Operation'),
-    '#options' => array(
-      ROOMS_ADD => t('Add to price'),
-      ROOMS_SUB => t('Subtract from price'),
-      ROOMS_REPLACE => t('Replace price'),
-      ROOMS_INCREASE => t('Increase price by % amount'),
-      ROOMS_DECREASE => t('Decrease price by % amount'),
-    ),
+    '#options' => $price_options,
     '#default_value' =>  'replace',
   );
 
@@ -483,24 +460,26 @@ function rooms_availability_pricing_update_form($form, &$form_state, $month, $ye
 
   $form['rooms_pricing_update']['actions']['submit'] = array(
     '#type' => 'submit',
-    '#value' => t('Update Room Pricing'),
+    '#value' => t('Update Unit Pricing'),
   );
 
   $form['#validate'][] = 'rooms_availability_pricing_update_form_validate';
   $form['#validate'][] = 'rooms_form_start_end_dates_validate';
 
   $form['rooms_data'] = array(
-    '#prefix' => '<table>',
+    '#prefix' => '<table class="rooms-month-manager">',
     '#type' => 'container',
-    '#suffix' => '</table>',
+    '#suffix' => '</tbody></table>',
   );
 
   if (count($rooms_units) > 0) {
+    $date = new DateTime();
+    $date->setDate($year, $month, '01');
     $form['rooms_data']['select-all'] = array(
       '#type' => 'select',
-      '#prefix' => '<tr><td>',
-      '#options' => array(t('Select...'), t('All (this page)'), t('All (all pages)'), t('None')),
-      '#suffix' => '</td><td></td></tr>',
+      '#prefix' => '<thead><tr><th class="unit-bulk-select">',
+      '#options' => array(t('- Select -'), t('All (this page)'), t('All (all pages)'), t('None')),
+      '#suffix' => '</th><th class="month-name"><div class="fc-header-title"><h2>' . format_date($date->getTimestamp(), 'custom', 'F Y') . '</h2></div></th></tr></thead><tbody>',
     );
 
     if (variable_get('ROOMS_SELECT_ALL_PAGES_PR') == 'true') {
@@ -512,8 +491,8 @@ function rooms_availability_pricing_update_form($form, &$form_state, $month, $ye
     $form['rooms_data']['rooms-'.$value->unit_id] = array(
       '#type' => 'checkbox',
       '#title' => $value->name,
-      '#prefix' => '<tr><td>',
-      '#suffix' => '</td><td><div id="calendar' . $key . '"></div></td></tr>',
+      '#prefix' => '<tr><th class="unit-name">',
+      '#suffix' => '</th><td class="unit-days"><div id="calendar' . $key . '"></div></td></tr>',
     );
 
     if (variable_get('ROOMS_SELECT_ALL_PAGES_PR') == 'true') {
@@ -530,7 +509,7 @@ function rooms_availability_pricing_update_form($form, &$form_state, $month, $ye
 function rooms_availability_pricing_update_form_validate(&$form, &$form_state) {
   // Make sure amount entered is numeric
   if (!empty($form_state['values']['amount']) && !is_numeric($form_state['values']['amount'])) {
-    form_set_error('amount', t('%name: you must enter a numeric value for the price.', array('%name' => 'Amount')));
+    form_set_error('amount', t('%name: you must enter a numeric value for the price.', array('%name' => t('Amount'))));
   }
   // validate that a rooms is selected
   _rooms_availability_select_rooms_validation($form_state);
@@ -614,9 +593,13 @@ function rooms_availability_pricing_update_form_submit(&$form, &$form_state) {
  * @see rooms_availability_bulk_unit_management()
  */
 function rooms_availability_update_status_form($form, &$form_state, $month, $year, $type, $rooms_units) {
+
+  $form['#attributes']['class'][] = 'rooms-management-form rooms-bulk-availability-form';
+
   $form['rooms_availability_update'] = array(
     '#type' => 'fieldset',
-    '#title' => 'Update Availability',
+    '#title' => t('Update Availability'),
+    '#description' => t('Change the availability status of the units selected below for the specified date range.'),
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
   );
@@ -638,19 +621,12 @@ function rooms_availability_update_status_form($form, &$form_state, $month, $yea
 
   $form['rooms_availability_update']['rooms_date_range'] = rooms_availability_date_range_fields($year, $month);
 
-  $state_options = array(
-    '-1' => 'Choose a new status',
-    ROOMS_NOT_AVAILABLE => t('Unavailable'),
-    ROOMS_AVAILABLE => t('Available'),
-    ROOMS_ON_REQUEST => t('On Request'),
-    ROOMS_ANON_BOOKED => t('Anonymous Booking'),
-  );
-
-  $form['rooms_availability_update']['change_event_status2'] = array(
-    '#title' => t("Bookable Unit State"),
+  $state_options = rooms_unit_state_options();
+  $form['rooms_availability_update']['change_event_status'] = array(
+    '#title' => t('Bookable Unit State'),
     '#type' => 'select',
     '#options' => $state_options,
-    '#description' => t('Choose what state to put the unit in for the dates chosen above'),
+    '#empty_option' => t('- Select -'),
   );
 
   $form['rooms_availability_update']['actions'] = array(
@@ -661,24 +637,26 @@ function rooms_availability_update_status_form($form, &$form_state, $month, $yea
 
   $form['rooms_availability_update']['actions']['submit'] = array(
     '#type' => 'submit',
-    '#value' => t('Update Room Availability'),
+    '#value' => t('Update Unit Availability'),
   );
 
   $form['#validate'][] = 'rooms_form_start_end_dates_validate';
   $form['#validate'][] = 'rooms_availability_update_status_form_validate';
 
   $form['rooms_data'] = array(
-    '#prefix' => '<table>',
+    '#prefix' => '<table class="rooms-month-manager">',
     '#type' => 'container',
-    '#suffix' => '</table>',
+    '#suffix' => '</tbody></table>',
   );
 
   if (count($rooms_units) > 0) {
+    $date = new DateTime();
+    $date->setDate($year, $month, '01');
     $form['rooms_data']['select-all'] = array(
       '#type' => 'select',
-      '#prefix' => '<tr><td>',
-      '#options' => array(t('Select...'), t('All (this page)'), t('All (all pages)'), t('None')),
-      '#suffix' => '</td><td></td></tr>',
+      '#prefix' => '<thead><tr><th class="unit-bulk-select">',
+      '#options' => array(t('- Select -'), t('All (this page)'), t('All (all pages)'), t('None')),
+      '#suffix' => '</th><th class="month-name"><div class="fc-header-title"><h2>' . format_date($date->getTimestamp(), 'custom', 'F Y') . '</h2></div></th></tr></thead><tbody>',
     );
 
     if (variable_get('ROOMS_SELECT_ALL_PAGES_AV') == 'true') {
@@ -690,8 +668,8 @@ function rooms_availability_update_status_form($form, &$form_state, $month, $yea
     $form['rooms_data']['rooms-' . $value->unit_id] = array(
       '#type' => 'checkbox',
       '#title' => $value->name,
-      '#prefix' => '<tr><td>',
-      '#suffix' => '</td><td><div id="calendar' . $key . '"></div></td></tr>',
+      '#prefix' => '<tr><th class="unit-name">',
+      '#suffix' => '</th><td  class="unit-days"><div id="calendar' . $key . '"></div></td></tr>',
     );
 
     if (variable_get('ROOMS_SELECT_ALL_PAGES_AV') == 'true') {
@@ -706,8 +684,8 @@ function rooms_availability_update_status_form($form, &$form_state, $month, $yea
  * Validate callback for rooms_availability_update_status_form form.
  */
 function rooms_availability_update_status_form_validate(&$form, &$form_state) {
-  if ($form_state['values']['change_event_status2'] == -1) {
-    form_set_error('change_event_status', t('Select a valid status'));
+  if (!$form_state['values']['change_event_status']) {
+    form_set_error('change_event_status', t('Select a valid status.'));
   }
   // validate that a rooms is selected
   _rooms_availability_select_rooms_validation($form_state);
@@ -716,7 +694,7 @@ function rooms_availability_update_status_form_validate(&$form, &$form_state) {
 function rooms_availability_update_status_form_submit(&$form, &$form_state) {
   list($start_date, $end_date) = rooms_form_input_get_start_end_dates($form_state);
   $type = $form_state['values']['curr_type'];
-  $event_id = $form_state['values']['change_event_status2'];
+  $event_id = $form_state['values']['change_event_status'];
 
   if (variable_get('ROOMS_SELECT_ALL_PAGES_AV') == 'true') {
     $query = db_select('rooms_units', 'n')->fields('n', array('unit_id', 'name'));
@@ -734,10 +712,10 @@ function rooms_availability_update_status_form_submit(&$form, &$form_state) {
       $rc = new UnitCalendar($unit_id);
       $response = $rc->updateCalendar($events);
       if ($response[$event_id] == ROOMS_BLOCKED) {
-        drupal_set_message(t($room->name . ' - Could not update calendar because a locked event is blocking the update - you need to unlock any locked events in that period'), 'warning');
+        drupal_set_message($room->name . ' - ' . t('Could not update calendar because a locked event is blocking the update - you need to unlock any locked events in that period.'), 'warning');
       }
       elseif ($response[$event_id] == ROOMS_UPDATED) {
-        drupal_set_message(t($room->name . ' - Calendar Updated'));
+        drupal_set_message($room->name . ' - ' . t('Calendar Updated'));
       }
     }
   }
@@ -752,10 +730,10 @@ function rooms_availability_update_status_form_submit(&$form, &$form_state) {
         $rc = new UnitCalendar($unit_id);
         $response = $rc->updateCalendar($events);
         if ($response[$event_id] == ROOMS_BLOCKED) {
-          drupal_set_message(t($form_state['complete form']['rooms_data'][$key]['#title'] . ' - Could not update calendar because a locked event is blocking the update - you need to unlock any locked events in that period'), 'warning');
+          drupal_set_message($form_state['complete form']['rooms_data'][$key]['#title'] . ' - ' . t('Could not update calendar because a locked event is blocking the update - you need to unlock any locked events in that period.'), 'warning');
         }
         elseif ($response[$event_id] == ROOMS_UPDATED) {
-          drupal_set_message(t($form_state['complete form']['rooms_data'][$key]['#title'] . ' - Calendar Updated'));
+          drupal_set_message($form_state['complete form']['rooms_data'][$key]['#title'] . ' - ' . t('Calendar Updated'));
         }
       }
     }
@@ -791,7 +769,7 @@ function availability_unit_load($unit_id) {
 
 
 /**
- * Room availability admin access callback
+ * Unit availability admin access callback
  */
 function rooms_availability_admin_access($rooms_unit) {
   if (user_access('manage booking unit availability')) {
@@ -802,7 +780,7 @@ function rooms_availability_admin_access($rooms_unit) {
 
 
 /**
- * Room availability access callback
+ * Unit availability access callback
  */
 function rooms_availability_access($rooms_unit) {
   if (user_access('view anonymous availability information') || user_access('view named availability information')) {
@@ -813,7 +791,7 @@ function rooms_availability_access($rooms_unit) {
 
 
 /**
- * Room availability access callback
+ * Unit availability access callback
  */
 function rooms_bulk_pricing_access() {
   if (user_access('manage booking unit pricing')) {
@@ -829,73 +807,82 @@ function rooms_bulk_pricing_access() {
  *
  */
 function rooms_availability_page(RoomsUnit $rooms_unit, $year='', $month='') {
-  // modal includes and style
+  // Set the page title.
+  drupal_set_title(t('Edit @unit_name Availability', array('@unit_name' => $rooms_unit->name)));
+
+  // Add styles.
   rooms_availability_modal_style();
 
-  // Basic check to avoid any uggliness
-  $year = check_plain($year);
-  $month = check_plain($month);
+  // Get the current page's URL, striped of the year and month args.
+  // This allows us to place this page anywhere, including at
+  // unit/%/availability  or  admin/rooms/units/unit/%/availability
+  list($url) = explode('/' . $year . '/' . $month, current_path());
 
-  // If year is not set then give it the current date
-  $year = ($year == '') ? date('Y', time()) : $year;
-  $month = ($month == '') ? date('n', time()) : $month;
+  return array(
+    '#theme' => 'rooms_three_month_calendar',
+    '#url' => $url,
+    '#form' => drupal_get_form('update_availability_calendar_form', $rooms_unit->unit_id, $year, $month),
+    '#year' => $year,
+    '#month' => $month,
+    '#attached' => array(
+      'css' => array(
+        drupal_get_path('module', 'rooms_availability') . '/css/rooms_availability.css',
+      ),
+      'js' => array(
+        drupal_get_path('module', 'rooms_availability') . '/js/rooms_availability.js',
+        array(
+          'data' => array('roomsAvailability' => array('roomID' => $rooms_unit->unit_id)),
+          'type' =>'setting',
+        ),
+      ),
+    ),
+  );
+}
 
-  // Add all the stuff we will need to show the FullCalendar
-  drupal_add_library('rooms_availability', 'rooms_fullcalendar');
-  drupal_add_js(drupal_get_path('module', 'rooms_availability') . '/js/rooms_availability.js');
+/**
+ * Default implementation of hook_preprocess_rooms_three_month_calendar().
+ *
+ * Here we setup the three-month calendar based on a specified year,
+ * month, and url.
+ */
+function rooms_availability_preprocess_rooms_three_month_calendar(&$vars) {
+
+  // Load FullCalendar
+  rooms_fullcalendar_loaded();
+
+  // Add css styles for three-month-calendar.
+  drupal_add_css(drupal_get_path('module', 'rooms_availability') . '/css/rooms_three_month_calendar.css');
   drupal_add_css(drupal_get_path('module', 'rooms_availability') . '/css/fullcalendar.theme.css');
-  drupal_add_css(drupal_get_path('module', 'rooms_availability') . '/css/rooms_availability.css');
 
-  // Inject settings in javascript that we will use
-  drupal_add_js(array('roomsAvailability' => array('roomID' => $rooms_unit->unit_id)), 'setting');
-  drupal_add_js(array('roomsAvailability' => array('currentMonth' => $month)), 'setting');
-  drupal_add_js(array('roomsAvailability' => array('currentYear' => $year)), 'setting');
+  // If dates are not provided then use the current date.
+  $year = (empty($vars['year'])) ? date('Y', time()) : check_plain($vars['year']);
+  $month = (empty($vars['month'])) ? date('n', time()) : check_plain($vars['month']);
 
+  // Inject settings in javascript that will be used to setup the three months
+  // display.
+  drupal_add_js(array('roomsCalendar' => array('currentMonth' => $month)), 'setting');
+  drupal_add_js(array('roomsCalendar' => array('currentYear' => $year)), 'setting');
 
-  // Calculate forward and back dates for our 3-month view calendar and create links
+  // Calculate forward and back dates for the 3-month view calendar.
   $date1 = new DateTime("$year-$month-1");
   $date2 = new DateTime("$year-$month-1");
   $date_current = new DateTime("now");
 
-
   $forward = $date1->add(new DateInterval('P3M'));
-  $forward_path = 'admin/rooms/units/unit/' . $rooms_unit->unit_id . '/availability/' . $forward->format('Y') . '/' . $forward->format('n');
-  $forward_link = l(t('Forward'), $forward_path);
-
   $backward = $date2->sub(new DateInterval('P3M'));
-  $backward_path = 'admin/rooms/units/unit/' . $rooms_unit->unit_id . '/availability/' . $backward->format('Y') . '/' . $backward->format('n');
-  $backward_link = l(t('Back'), $backward_path);
 
-  $current_path = 'admin/rooms/units/unit/' . $rooms_unit->unit_id . '/availability/' . $date_current->format('Y') . '/' . $date_current->format('n');
-  $current_link = l(t('Current'), $current_path);
+  // Create the links based off the url variable passed in.
+  if (!isset($vars['url'])) {
+    $vars['url'] = '';
+  }
 
-  // The content to theme
-  $content = array();
+  $forward_path = $vars['url'] . '/' . $forward->format('Y') . '/' . $forward->format('n');
+  $backward_path = $vars['url'] . '/' . $backward->format('Y') . '/' . $backward->format('n');
+  $current_path = $vars['url'] . '/' . $date_current->format('Y') . '/' . $date_current->format('n');
 
-  $content['title'] = array(
-    '#prefix' => '<div class="availability-title">',
-    '#markup' => '<h2>' . t('@name Availability View', array('@name' => $rooms_unit->name)) . '</h2>',
-    '#suffix' => '</div>'
-  );
-  $content['room_name'] = $rooms_unit->name;
-  $content['type'] = $rooms_unit->type;
-  $content['update_form'] = drupal_get_form('update_availability_calendar_form', $rooms_unit->unit_id, $year, $month);
-  $content['start_year'] = $year;
-  $content['start_month'] = $month;
-  $content['forward_link'] = $forward_link;
-  $content['backward_link'] = $backward_link;
-  $content['current_link'] = $current_link;
-
-  $content['update_form_into'] = array(
-    '#prefix' => '<div class="availability-update">',
-    '#markup' => '<h2>' . t('Update Room Availability') . '</h2>',
-    '#suffix' => '</div>'
-  );
-
-  // Send everything for theming
-  $output = theme('rooms_availability', $content);
-
-  return $output;
+  $vars['forward_link'] = l(t('Forward'), $forward_path);
+  $vars['backward_link'] = l(t('Back'), $backward_path);
+  $vars['current_link'] = l(t('Current'), $current_path);
 }
 
 
@@ -904,9 +891,12 @@ function rooms_availability_page(RoomsUnit $rooms_unit, $year='', $month='') {
  */
 function update_availability_calendar_form($form, &$form_state, $unit_id, $year, $month) {
 
+  $form['#attributes']['class'][] = 'rooms-management-form rooms-availability-calendar-form';
+
   $form['rooms_update_availability'] = array(
     '#type' => 'fieldset',
-    '#title' => 'Update Availability',
+    '#title' => t('Update Unit Availability'),
+    '#description' => t('Change the availability status for a specified date range.'),
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
   );
@@ -920,16 +910,11 @@ function update_availability_calendar_form($form, &$form_state, $unit_id, $year,
   // Unset a js setting
   drupal_add_js(array('rooms' => array('roomsBookingStartDay' => 0)), 'setting');
 
+  $state_options = rooms_unit_state_options();
   $form['rooms_update_availability']['unit_state'] = array(
     '#type' => 'select',
-    '#title' => t('Bookable Unit State'),
-    '#options' => array(
-      ROOMS_NOT_AVAILABLE => 'Unavailable',
-      ROOMS_AVAILABLE => 'Available',
-      ROOMS_ON_REQUEST => 'Available on Request',
-      ROOMS_ANON_BOOKED => 'Anonymous Booking'
-    ),
-    '#description' => t('Choose what state to put the unit in for the dates chosen above'),
+    '#title' => t('Change status to'),
+    '#options' => $state_options,
   );
 
   $form['rooms_update_availability']['actions'] = array(
@@ -948,7 +933,7 @@ function update_availability_calendar_form($form, &$form_state, $unit_id, $year,
 
   $form['rooms_update_availability']['actions']['submit'] = array(
     '#type' => 'submit',
-    '#value' => t('Update Room Availability'),
+    '#value' => t('Update Availability'),
     '#submit' => $submit + array('update_availability_calendar_form_submit'),
   );
 
@@ -958,6 +943,7 @@ function update_availability_calendar_form($form, &$form_state, $unit_id, $year,
 
   return $form;
 }
+
 
 /**
  *@todo Need to figure out what to do when we cancel an existing booking
@@ -973,7 +959,7 @@ function update_availability_calendar_form_submit(&$form, &$form_state) {
   $rc = new UnitCalendar($unit_id);
   $response = $rc->updateCalendar($events);
   if ($response[$event_id] == ROOMS_BLOCKED) {
-    drupal_set_message(t('Could not update calendar because a locked event is blocking the update - you need to unlock any locked events in that period'), 'warning');
+    drupal_set_message(t('Could not update calendar because a locked event is blocking the update - you need to unlock any locked events in that period.'), 'warning');
   }
   elseif ($response[$event_id] == ROOMS_UPDATED) {
     drupal_set_message(t('Calendar Updated'));
@@ -1061,62 +1047,40 @@ function rooms_availability_event($units, $start_year = '', $start_month = '', $
 
 
 /**
- * The EventManager page shows when clicking on an event in the availability calendar - will allow a user to manipulate
- * that event.
+ * The EventManager page shows when clicking on an event in the availability
+ * calendar - will allow a user to manipulate that event.
  */
 function rooms_availability_event_manager_page($unit, $event_id = NULL, $start_date = 0, $end_date = 0) {
   // include modal library
   ctools_include('modal');
 
-  // If any info missing we cannot load the event
+  // If any info missing we cannot load the event.
   if ($event_id == NULL || $start_date == 0 || $end_date == 0) {
     $output[] = ctools_modal_command_dismiss();
-    drupal_set_message('Unable to load event', 'error');
+    drupal_set_message(t('Unable to load event.'), 'error');
   }
 
-  $state_options = array(
-    ROOMS_NOT_AVAILABLE => 'Unavailable',
-    ROOMS_AVAILABLE => 'Available',
-    ROOMS_ON_REQUEST => 'On Request',
-    ROOMS_ANON_BOOKED => 'Anonymous Booking',
-  );
-
-  // Basic check to avoid damage from dirty input
+  // Basic check to avoid damage from dirty input.
   $event_id = check_plain($event_id);
   $start_date = check_plain($start_date);
   $end_date = check_plain($end_date);
 
-  $booked = FALSE;
-  if ($event_id > 10 || $event_id < -10) {
-    $booked = TRUE;
-  }
-
+  // Process start and end date.
   $sd = new DateTime();
   $sd->setTimezone(new DateTimeZone('UTC'))->setTimestamp($start_date);
 
   $ed = new DateTime();
   $ed->setTimezone(new DateTimeZone('UTC'))->setTimestamp($end_date);
 
-  if (!$booked) {
-    if ($event_id == -2) {
-      $content['event_title'] = array(
-        '#prefix' => '<h2>',
-        '#markup' => t('@room', array('@room' => $unit->name)),
-        '#suffix' => '</h2>'
-      );
-    }
-    else {
-      $content['event_title'] = array(
-        '#prefix' => '<h2>',
-        '#markup' => t('@room is @status', array('@room' => $unit->name, '@status' => $state_options[$event_id])),
-        '#suffix' => '</h2>'
-      );
-    }
+  $booked = FALSE;
+  if ($event_id > 10 || $event_id < -10) {
+    $booked = TRUE;
   }
-  else {
+
+  if ($booked) {
     $booking_id = rooms_availability_return_id($event_id);
     $booking = rooms_booking_load($booking_id);
-    // for existing bookings allow to edit in the modal
+    // For existing bookings allow to edit in the modal.
     module_load_include('inc', 'rooms_booking', 'rooms_booking.admin');
     $form_state = array(
       'title' => t('Edit booking'),
@@ -1132,7 +1096,7 @@ function rooms_availability_event_manager_page($unit, $event_id = NULL, $start_d
         ),
       ),
     );
-    // wrap the form via ctools modal
+    // Wrap the form via ctools modal.
     $output = ctools_modal_form_wrapper('rooms_booking_edit_form', $form_state);
     if ($form_state['executed']) {
       $output = array(ctools_modal_command_dismiss());
@@ -1141,19 +1105,17 @@ function rooms_availability_event_manager_page($unit, $event_id = NULL, $start_d
     exit();
   }
 
-  $date_format = variable_get('rooms_date_format', 'd-m-Y');
-  $content['event_details'] = array(
-    '#prefix' => '<div class="event-details">',
-    '#markup' => t('Duration: @startdate to @enddate', array('@startdate' => $sd->format($date_format), '@enddate' => $ed->format($date_format))),
-    '#suffix' => '</div>'
-  );
-
-  if (!$booked) {
-    $content['event_manager_form'] = drupal_get_form('rooms_availability_event_manager_form', $unit->unit_id, $event_id, $start_date, $end_date);
+  // If the event is blocked, show an error message.
+  $uc = new UnitCalendar($unit->unit_id);
+  $mock_event = new BookingEvent($unit->unit_id, NULL, $sd, $ed);
+  if ($uc->eventBlocked($mock_event)) {
+    drupal_set_message(t('You can not update calendar because a locked event is blocking the update. You need to unlock any locked events in that period.'), 'warning');
+    $output = theme('status_messages');
+    ctools_modal_render(t('Event Management'), $output);
+    return;
   }
 
-  $output = theme('rooms_event', $content);
-  return ctools_modal_render('Event Management', $output);
+  ctools_modal_render(t('Event Management'), drupal_get_form('rooms_availability_event_manager_form', $unit, $event_id, $sd, $ed));
 }
 
 /**
@@ -1185,23 +1147,34 @@ function rooms_availability_modal_style() {
 
   // add the ctool modal configuration to settings
   drupal_add_js($modal_style, 'setting');
+
+  // add the ctools modal stylesheet.
+  drupal_add_css(drupal_get_path('module', 'rooms') . '/css/rooms_modal.css');
 }
+
 
 /**
  * The Event Manager Form - will eventually change based on the type of event we are manipulating
  */
-function rooms_availability_event_manager_form($form, $form_state, $unit_id, $event_id, $start_date, $end_date) {
+function rooms_availability_event_manager_form($form, $form_state, $unit, $event_id, $start_date, $end_date) {
   $form = array();
+  $new_event_id = $event_id;
 
-  $form['form_wrapper_top'] = array(
-    '#type' => 'item',
-    '#markup' => '',
-    '#prefix' => '<div id="replace_textfield_div">',
-  );
+  if (isset($form_state['values']['change_event_status'])) {
+    $new_event_id = $form_state['values']['change_event_status'];
+  }
+
+  $state_options = rooms_unit_state_options();
+
+  $form['#attributes']['class'][] = 'rooms-management-form rooms-event-form';
+
+  // This entire form element will be replaced whenever 'changethis' is updated.
+  $form['#prefix'] = '<div id="replace_textfield_div">';
+  $form['#suffix'] = '</div>';
 
   $form['unit_id'] = array(
     '#type' => 'hidden',
-    '#value' => $unit_id,
+    '#value' => $unit->unit_id,
   );
 
   $form['event_id'] = array(
@@ -1219,55 +1192,62 @@ function rooms_availability_event_manager_form($form, $form_state, $unit_id, $ev
     '#value' => $end_date,
   );
 
-  $state_options = array(
-    '-1' => t('Choose a new status'),
-    ROOMS_NOT_AVAILABLE => t('Unavailable'),
-    ROOMS_AVAILABLE => t('Available'),
-    ROOMS_ON_REQUEST => t('On Request'),
-    ROOMS_ANON_BOOKED => t('Anonymous Booking'),
+  if ($event_id == -2) {
+    $form['event_title'] = array(
+      '#prefix' => '<h2>',
+      '#markup' => check_plain($unit->name),
+      '#suffix' => '</h2>'
+    );
+  }
+  else {
+    $form['event_title'] = array(
+      '#prefix' => '<h2>',
+      '#markup' => t('@unit_name is @status', array('@unit_name' => $unit->name, '@status' => $state_options[$new_event_id])),
+      '#suffix' => '</h2>'
+    );
+  }
+
+  $date_format = variable_get('rooms_date_format', 'd-m-Y');
+  $form['event_details'] = array(
+    '#prefix' => '<div class="event-details">',
+    '#markup' => t('Duration: @startdate to @enddate', array('@startdate' => $start_date->format($date_format), '@enddate' => $end_date->format($date_format))),
+    '#suffix' => '</div>'
   );
 
-  unset($state_options[$event_id]);
+  unset($state_options[$new_event_id]);
 
   $form['change_event_status'] = array(
-    '#title' => t("Change the state for this event to:") . ' ',
+    '#title' => t('Change the state for this event to:') . ' ',
     '#type' => 'select',
     '#options' => $state_options,
-    '#default_value' => $event_id,
     '#ajax' => array(
       'callback' => 'rooms_availability_ajax_event_status_change',
       'wrapper' => 'replace_textfield_div',
-     ),
+    ),
+    '#empty_option' => t('- Select -'),
   );
 
-  if (module_exists('rooms_booking')) {
+  if (module_exists('rooms_booking') && $new_event_id != 89) {
     $booking_types = rooms_booking_get_types();
 
-    $options = array();
     foreach ($booking_types as $type) {
       $form['order']['order_link'][$type->type] = array(
         '#type' => 'markup',
-        '#markup' => '<div>' . t('<a href="@url">Create @type</a>', array('@url' => url('admin/rooms/bookings/add/' . $type->type, array('query' => array('startdate' => $start_date, 'enddate' => $end_date, 'unitid' => $unit_id))), '@type' => $type->label)) . '</div>',
+        '#markup' => '<div>' . l(t('Create @booking_type', array('@booking_type' => $type->label)), 'admin/rooms/bookings/add/' . $type->type, array('query' => array('startdate' => $start_date->getTimestamp(), 'enddate' => $end_date->getTimestamp(), 'unitid' => $unit->unit_id))) . '</div>',
       );
     }
   }
 
-  // This entire form element will be replaced whenever 'changethis' is updated.
-  $form['form_wrapper_bottom'] = array(
-    '#type' => 'item',
-    '#markup' => '',
-    '#suffix' => '</div>',
-  );
-
   return $form;
-
 }
+
 
 /**
  * The callback for the change_event_status widget of the event manager form
  */
 function rooms_availability_ajax_event_status_change($form, $form_state) {
-  list($start_date, $end_date) = rooms_form_values_get_start_end_dates($form_state);
+  $start_date = $form_state['values']['rooms_start_date'];
+  $end_date = $form_state['values']['rooms_end_date'];
   $unit_id = $form_state['values']['unit_id'];
   $event_id = $form_state['values']['event_id'];
   $new_event_id = $form_state['values']['change_event_status'];
@@ -1278,11 +1258,12 @@ function rooms_availability_ajax_event_status_change($form, $form_state) {
     $uc = new UnitCalendar($unit_id);
     $responses = $uc->updateCalendar(array($event));
 
+    $state_options = rooms_unit_state_options();
     if ($event_id >= -1) {
-      $form['form_wrapper_bottom']['#markup'] = t('Original Event id is: ') . $event_id . t(' New Event id is: ') . $new_event_id;
+      $form['form_wrapper_bottom']['#markup'] = t('Updated event from <strong>@old_status</strong> to <strong>@new_status</strong>.', array('@old_status' => $state_options[$event_id], '@new_status' => $state_options[$new_event_id]));
     }
     else {
-      $form['form_wrapper_bottom']['#markup'] = t('New Event id is: ') . $new_event_id;
+      $form['form_wrapper_bottom']['#markup'] = t('New Event state is <strong>@state</strong>.', array('@state' => $state_options[$new_event_id]));
     }
   }
 
@@ -1295,15 +1276,18 @@ function rooms_availability_ajax_event_status_change($form, $form_state) {
  */
 function rooms_availability_theme() {
   return array(
-    'rooms_availability' => array(
-      'template' => 'rooms_availability'
+    'rooms_three_month_calendar' => array(
+      'template' => 'rooms_three_month_calendar',
+      'variables' => array(
+        'url' => NULL,
+        'form' => NULL,
+        'year' => NULL,
+        'month' => NULL,
+      ),
     ),
-    'rooms_event' => array(
-      'template' => 'rooms_event'
-    )
-
   );
 }
+
 
 /**
  * Sets event ids
@@ -1337,173 +1321,169 @@ function rooms_availability_return_id($id) {
 }
 
 /**
- * Returns the path to the FullCalendar plugin.
+ * Implements hook_form__FORM_ID_alter().
+ * FORM_ID = rooms_booking_settings
  */
-function rooms_availability_fullcalendar_get_js_path() {
-  //$fullcalendar_file = array('none' => 'fullcalendar.js', 'min' => 'fullcalendar.min.js');
-  $fullcalendar_file = array('none' => 'fullcalendar.js', 'min' => 'fullcalendar.min.js');
-  return variable_get('rooms_ROOMS_FC_PATH', ROOMS_FC_PATH) . '/' . $fullcalendar_file[variable_get('rooms_fullcalendar_compression_type', 'min')];
-}
+function rooms_availability_form_rooms_booking_settings_alter(&$form, &$form_state, $form_id) {
+  $form['label_settings'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Calendar Color Codes & Labels'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
 
-/**
- * Implements hook_form_alter().
- */
-function rooms_availability_form_alter(&$form, &$form_state, $form_id) {
-  if ($form_id == 'rooms_booking_settings') {
-    $form['label_settings'] = array(
-      '#type' => 'fieldset',
-      '#title' => t('Calendar Color Codes & Labels'),
-      '#collapsible' => TRUE,
-      '#collapsed' => TRUE,
-    );
-
-    $form['label_settings']['rooms_not_available_color'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Room not available color'),
-      '#size' => 10,
-      '#maxlength' => 7,
-      '#default_value' => variable_get('rooms_not_available_color', '#FF0000'),
-      '#element_validate' => array('rooms_availability_validate_hex_color'),
-      '#dependency' => array('edit-row-options-colors-legend' => array('type')),
-      '#prefix' => '<div class="rooms-colorpicker-wrapper">',
-      '#suffix' => '<div class="rooms-colorpicker"></div></div>',
-      '#attributes' => array('class' => array('rooms-edit-colorpicker')),
-      '#attached' => array(
-        // Add Farbtastic color picker.
-        'library' => array(
-          array('system', 'farbtastic'),
-        ),
-        // Add javascript to trigger the colorpicker.
-        'js' => array(drupal_get_path('module', 'rooms_availability') . '/js/rooms_color.js'),
+  $form['label_settings']['rooms_not_available_color'] = array(
+    '#type' => 'textfield',
+    '#title' => t('"@availability_status" color', array('@availability_status' => t('Unavailable'))),
+    '#size' => 10,
+    '#maxlength' => 7,
+    '#default_value' => variable_get('rooms_not_available_color', '#FF0000'),
+    '#element_validate' => array('rooms_availability_validate_hex_color'),
+    '#dependency' => array('edit-row-options-colors-legend' => array('type')),
+    '#prefix' => '<div class="rooms-colorpicker-wrapper form-wrapper">',
+    '#suffix' => '<div class="rooms-colorpicker"></div></div>',
+    '#attributes' => array('class' => array('rooms-edit-colorpicker')),
+    '#attached' => array(
+      // Add Farbtastic color picker.
+      'library' => array(
+        array('system', 'farbtastic'),
       ),
-    );
+      // Add javascript to trigger the colorpicker.
+      'js' => array(drupal_get_path('module', 'rooms_availability') . '/js/rooms_color.js'),
+    ),
+  );
 
-    $form['label_settings']['rooms_not_available_text'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Room not available label'),
-      '#size' => 10,
-      '#maxlength' => 50,
-      '#default_value' => variable_get('rooms_not_available_text', 'N/A'),
-    );
+  $form['label_settings']['rooms_not_available_text'] = array(
+    '#type' => 'textfield',
+    '#title' => t('"@availability_status" label', array('@availability_status' => t('Unavailable'))),
+    '#size' => 10,
+    '#maxlength' => 50,
+    '#default_value' => variable_get('rooms_not_available_text', 'N/A'),
+  );
 
-    $form['label_settings']['rooms_available_color'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Room Available color'),
-      '#size' => 10,
-      '#maxlength' => 7,
-      '#default_value' => variable_get('rooms_available_color', '#8CBF62'),
-      '#element_validate' => array('rooms_availability_validate_hex_color'),
-      '#dependency' => array('edit-row-options-colors-legend' => array('type')),
-      '#prefix' => '<div class="rooms-colorpicker-wrapper">',
-      '#suffix' => '<div class="rooms-colorpicker"></div></div>',
-      '#attributes' => array('class' => array('rooms-edit-colorpicker')),
-      '#attached' => array(
-        // Add Farbtastic color picker.
-        'library' => array(
-          array('system', 'farbtastic'),
-        ),
-        // Add javascript to trigger the colorpicker.
-        'js' => array(drupal_get_path('module', 'rooms_availability') . '/js/rooms_color.js'),
+  $form['label_settings']['rooms_available_color'] = array(
+    '#type' => 'textfield',
+    '#title' => t('"@availability_status" color', array('@availability_status' => t('Available'))),
+    '#size' => 10,
+    '#maxlength' => 7,
+    '#default_value' => variable_get('rooms_available_color', '#8CBF62'),
+    '#element_validate' => array('rooms_availability_validate_hex_color'),
+    '#dependency' => array('edit-row-options-colors-legend' => array('type')),
+    '#prefix' => '<div class="rooms-colorpicker-wrapper">',
+    '#suffix' => '<div class="rooms-colorpicker"></div></div>',
+    '#attributes' => array('class' => array('rooms-edit-colorpicker')),
+    '#attached' => array(
+      // Add Farbtastic color picker.
+      'library' => array(
+        array('system', 'farbtastic'),
       ),
-    );
+      // Add javascript to trigger the colorpicker.
+      'js' => array(drupal_get_path('module', 'rooms_availability') . '/js/rooms_color.js'),
+    ),
+  );
 
-    $form['label_settings']['rooms_available_text'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Room Available label'),
-      '#size' => 10,
-      '#maxlength' => 50,
-      '#default_value' => variable_get('rooms_available_text', 'AV'),
-    );
+  $form['label_settings']['rooms_available_text'] = array(
+    '#type' => 'textfield',
+    '#title' => t('"@availability_status" label', array('@availability_status' => t('Available'))),
+    '#size' => 10,
+    '#maxlength' => 50,
+    '#default_value' => variable_get('rooms_available_text', 'AV'),
+  );
 
-    $form['label_settings']['rooms_on_request_color'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Room available on request color'),
-      '#size' => 10,
-      '#maxlength' => 7,
-      '#default_value' => variable_get('rooms_on_request_color', '#C5C5C5'),
-      '#element_validate' => array('rooms_availability_validate_hex_color'),
-      '#dependency' => array('edit-row-options-colors-legend' => array('type')),
-      '#prefix' => '<div class="rooms-colorpicker-wrapper">',
-      '#suffix' => '<div class="rooms-colorpicker"></div></div>',
-      '#attributes' => array('class' => array('rooms-edit-colorpicker')),
-      '#attached' => array(
-        // Add Farbtastic color picker.
-        'library' => array(
-          array('system', 'farbtastic'),
-        ),
-        // Add javascript to trigger the colorpicker.
-        'js' => array(drupal_get_path('module', 'rooms_availability') . '/js/rooms_color.js'),
+  $form['label_settings']['rooms_on_request_color'] = array(
+    '#type' => 'textfield',
+    '#title' => t('"@availability_status" color', array('@availability_status' => t('Available on Request'))),
+    '#size' => 10,
+    '#maxlength' => 7,
+    '#default_value' => variable_get('rooms_on_request_color', '#C5C5C5'),
+    '#element_validate' => array('rooms_availability_validate_hex_color'),
+    '#dependency' => array('edit-row-options-colors-legend' => array('type')),
+    '#prefix' => '<div class="rooms-colorpicker-wrapper">',
+    '#suffix' => '<div class="rooms-colorpicker"></div></div>',
+    '#attributes' => array('class' => array('rooms-edit-colorpicker')),
+    '#attached' => array(
+      // Add Farbtastic color picker.
+      'library' => array(
+        array('system', 'farbtastic'),
       ),
-    );
+      // Add javascript to trigger the colorpicker.
+      'js' => array(drupal_get_path('module', 'rooms_availability') . '/js/rooms_color.js'),
+    ),
+  );
 
-    $form['label_settings']['rooms_on_request_text'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Room available on request label'),
-      '#size' => 10,
-      '#maxlength' => 50,
-      '#default_value' => variable_get('rooms_on_request_text', 'ON-REQ'),
-    );
+  $form['label_settings']['rooms_on_request_text'] = array(
+    '#type' => 'textfield',
+    '#title' => t('"@availability_status" label', array('@availability_status' => t('Available on Request'))),
+    '#size' => 10,
+    '#maxlength' => 50,
+    '#default_value' => variable_get('rooms_on_request_text', 'ON-REQ'),
+  );
 
-    $form['label_settings']['rooms_anon_booking_color'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Anonymous booking color'),
-      '#size' => 10,
-      '#maxlength' => 7,
-      '#default_value' => variable_get('rooms_anon_booking_color', '#481600'),
-      '#element_validate' => array('rooms_availability_validate_hex_color'),
-      '#dependency' => array('edit-row-options-colors-legend' => array('type')),
-      '#prefix' => '<div class="rooms-colorpicker-wrapper">',
-      '#suffix' => '<div class="rooms-colorpicker"></div></div>',
-      '#attributes' => array('class' => array('rooms-edit-colorpicker')),
-      '#attached' => array(
-        // Add Farbtastic color picker.
-        'library' => array(
-          array('system', 'farbtastic'),
-        ),
-        // Add javascript to trigger the colorpicker.
-        'js' => array(drupal_get_path('module', 'rooms_availability') . '/js/rooms_color.js'),
+  $form['label_settings']['rooms_anon_booking_color'] = array(
+    '#type' => 'textfield',
+    '#title' => t('"@availability_status" color', array('@availability_status' => t('Anonymous booking'))),
+    '#size' => 10,
+    '#maxlength' => 7,
+    '#default_value' => variable_get('rooms_anon_booking_color', '#481600'),
+    '#element_validate' => array('rooms_availability_validate_hex_color'),
+    '#dependency' => array('edit-row-options-colors-legend' => array('type')),
+    '#prefix' => '<div class="rooms-colorpicker-wrapper">',
+    '#suffix' => '<div class="rooms-colorpicker"></div></div>',
+    '#attributes' => array('class' => array('rooms-edit-colorpicker')),
+    '#attached' => array(
+      // Add Farbtastic color picker.
+      'library' => array(
+        array('system', 'farbtastic'),
       ),
-    );
+      // Add javascript to trigger the colorpicker.
+      'js' => array(drupal_get_path('module', 'rooms_availability') . '/js/rooms_color.js'),
+    ),
+  );
 
-    $form['label_settings']['rooms_anon_booking_text'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Anonymous booking label'),
-      '#size' => 10,
-      '#maxlength' => 50,
-      '#default_value' => variable_get('rooms_anon_booking_text', 'A-B'),
-    );
+  $form['label_settings']['rooms_anon_booking_text'] = array(
+    '#type' => 'textfield',
+    '#title' => t('"@availability_status" label', array('@availability_status' => t('Anonymous booking'))),
+    '#size' => 10,
+    '#maxlength' => 50,
+    '#default_value' => variable_get('rooms_anon_booking_text', 'A-B'),
+  );
 
-    $form['label_settings']['rooms_unconfirmed_booking_color'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Unconfirmed booking'),
-      '#size' => 10,
-      '#maxlength' => 7,
-      '#default_value' => variable_get('rooms_unconfirmed_booking_color', '#481600'),
-      '#element_validate' => array('rooms_availability_validate_hex_color'),
-      '#dependency' => array('edit-row-options-colors-legend' => array('type')),
-      '#prefix' => '<div class="rooms-colorpicker-wrapper">',
-      '#suffix' => '<div class="rooms-colorpicker"></div></div>',
-      '#attributes' => array('class' => array('rooms-edit-colorpicker')),
-      '#attached' => array(
-        // Add Farbtastic color picker.
-        'library' => array(
-          array('system', 'farbtastic'),
-        ),
-        // Add javascript to trigger the colorpicker.
-        'js' => array(drupal_get_path('module', 'rooms_availability') . '/js/rooms_color.js'),
+  $form['label_settings']['rooms_unconfirmed_booking_color'] = array(
+    '#type' => 'textfield',
+    '#title' => t('"@availability_status" color', array('@availability_status' => t('Unconfirmed booking'))),
+    '#size' => 10,
+    '#maxlength' => 7,
+    '#default_value' => variable_get('rooms_unconfirmed_booking_color', '#481600'),
+    '#element_validate' => array('rooms_availability_validate_hex_color'),
+    '#dependency' => array('edit-row-options-colors-legend' => array('type')),
+    '#prefix' => '<div class="rooms-colorpicker-wrapper">',
+    '#suffix' => '<div class="rooms-colorpicker"></div></div>',
+    '#attributes' => array('class' => array('rooms-edit-colorpicker')),
+    '#attached' => array(
+      // Add Farbtastic color picker.
+      'library' => array(
+        array('system', 'farbtastic'),
       ),
-    );
+      // Add javascript to trigger the colorpicker.
+      'js' => array(drupal_get_path('module', 'rooms_availability') . '/js/rooms_color.js'),
+    ),
+  );
 
-    $form['label_settings']['rooms_view_unit_name'] = array(
-      '#type' => 'checkboxes',
-      '#options' => array(
-        '1' => t('Display unit name in place of availability state label.'),
-      ),
-      '#default_value' => variable_get('rooms_view_unit_name', array('')),
-    );
+  $form['label_settings']['rooms_unconfirmed_booking_text'] = array(
+    '#type' => 'textfield',
+    '#title' => t('"@availability_status" label', array('@availability_status' => t('Unconfirmed booking'))),
+    '#size' => 10,
+    '#maxlength' => 50,
+    '#default_value' => variable_get('rooms_unconfirmed_booking_text', 'UNCONF'),
+  );
 
-
-  }
+  $form['label_settings']['rooms_view_unit_name'] = array(
+    '#type' => 'checkboxes',
+    '#options' => array(
+      '1' => t('Display unit name in place of availability state label.'),
+    ),
+    '#default_value' => variable_get('rooms_view_unit_name', array('')),
+  );
 }
 
 
@@ -1517,13 +1497,45 @@ function rooms_availability_validate_hex_color($element, &$form_state) {
 }
 
 
+/**
+ * Creates a pair of date popup fields for Bulk Unit Management operations.
+ *
+ * This function is similar to rooms_date_range_fields() in the main rooms
+ * module, however, since the bulk management UI limits date range input to
+ * act on the current month only, we've modified the original functionality
+ * to also make the same limits for the datepicker as well to only allow days
+ * within the specified month and year.
+ */
 function rooms_availability_date_range_fields($year, $month) {
   $date_range_fields = array();
 
   $date_format = str_replace('-', '/', variable_get('rooms_date_format', 'd-m-Y'));
 
+  // Calculate min and max dates of the specified year/month.
+  $date = new DateTime();
+  $date->setDate($year, $month, 01);
+  $min_date = $date->format($date_format);
+  $date->modify('last day of this month');
+  $max_date = $date->format($date_format);
+
+  // Create unique ids and selectors for each picker.
+  $start_date_id = drupal_html_id('datepicker-start-date');
+  $start_date_selector = '#' . $start_date_id . ' .form-text';
+
+  $end_date_id = drupal_html_id('datepicker-end-date');
+  $end_date_selector = '#' . $start_date_id . ' .form-text';
+
+  // Specify the default datepicker parameters (see date_popup_element_info())
+  $datepicker_options = array(
+    'dateFormat' => rooms_dateFormatTojQueryUIDatePickerFormat($date_format),
+    'minDate' => $min_date,
+    'maxDate' => $max_date,
+    'defaultDate' => $min_date,
+    'numberOfMonths' => 1,
+  );
+
   $date_range_fields['rooms_start_date'] = array(
-    '#prefix' => '<div class="start-date">',
+    '#prefix' => '<div class="form-wrapper rooms-date-range"><div class="start-date" id="' . $start_date_id . '">',
     '#suffix' => '</div>',
     '#type' => 'date_popup',
     '#title' => t('Start Date'),
@@ -1531,30 +1543,57 @@ function rooms_availability_date_range_fields($year, $month) {
     '#date_format' => $date_format,
     '#date_increment' => 1,
     '#date_year_range' => '-1:+3',
+    // Default datepicker parameters defined above, with an additional parameter
+    // linking to the jQuery selector for the end datepicker.
+    '#datepicker_options' => array_merge($datepicker_options, array('endDateSelector' => $end_date_selector)),
     '#required' => TRUE,
   );
 
+
   $date_range_fields['rooms_end_date'] = array(
-    '#prefix' => '<div class="end-date">',
-    '#suffix' => '</div>',
+    '#prefix' => '<div class="end-date" id="' . $end_date_id . '">',
+    '#suffix' => '</div></div>',
     '#type' => 'date_popup',
     '#title' => t('End Date'),
     '#date_type' => DATE_DATETIME,
     '#date_format' => $date_format,
     '#date_increment' => 1,
     '#date_year_range' => '-1:+3',
+    // Default parameters defined above, with an additional parameter
+    // parameter linking to the jQuery selector for the start datepicker.
+    '#datepicker_options' => array_merge($datepicker_options, array('startDateSelector' => $start_date_selector)),
     '#required' => TRUE,
+    '#attached' => array(
+      'css' => array(
+        drupal_get_path('module', 'rooms') . '/css/rooms_date_range_fields.css',
+      ),
+      'js' => array(
+        drupal_get_path('module', 'rooms') . '/js/rooms_date_popup.js',
+        array(
+         'data' => array(
+            'rooms' => array(
+              'roomsStartYear' => $year,
+              'roomsStartMonth' => $month,
+              'roomsBookingStartDay' => variable_get('rooms_booking_start_date', 1),
+              'roomsDateFormat' => rooms_dateFormatTojQueryUIDatePickerFormat($date_format),
+              // Here we create a listing of all datepickers registered on the
+              // current page. This is available for use in your own custom
+              // jQuery scripts as Drupal.settings.rooms.datepickers.
+              'datepickers' => array(
+                $start_date_selector => array(
+                  'endDateSelector' => $end_date_selector,
+                ),
+              ),
+            ),
+          ),
+          'type' => 'setting',
+        ),
+      ),
+    ),
   );
-
-  drupal_add_js(array('rooms' => array(
-      'roomsStartYear' => $year,
-      'roomsStartMonth' => $month,
-      'roomsDateFormat' => rooms_dateFormatTojQueryUIDatePickerFormat($date_format),
-    )), 'setting');
-  drupal_add_js(drupal_get_path('module', 'rooms_availability') . '/js/rooms_availability_date_popup.js');
-
   return $date_range_fields;
 }
+
 
 /**
  * Helper validate function to ensure that at least one room is selected.
@@ -1573,6 +1612,6 @@ function _rooms_availability_select_rooms_validation($form_state) {
   }
 
   if (!$select_rooms) {
-    form_set_error('select-all', t('Select at least one room'));
+    form_set_error('select-all', t('Select at least one unit.'));
   }
 }

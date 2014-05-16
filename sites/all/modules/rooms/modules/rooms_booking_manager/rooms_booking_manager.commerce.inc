@@ -26,15 +26,18 @@ function rooms_create_line_item($unit_to_book, AvailabilityAgent $agent, $bookin
     $line_item = commerce_product_line_item_new($room_product, 1, 0, array(), 'rooms_booking');
 
     // Product name - we set something that will make sense to the user here - this needs to be parametrised of course
-    $nights = $dd->diff($agent->start_date)->d;
-    $line_item_label = 'Booking for ' . $unit_type->label . ' (' . $nights . ' Nights; Arrival: ' . $agent->start_date->format($date_format) . ' Departure: ' . $dd->format($date_format) . ')';
+    $nights = $dd->diff($agent->start_date)->days;
+    $line_item_label = t('Booking for') . ' ' . $unit_type->label . ' (';
+    $line_item_label .= format_plural($nights, '1 Night', '@count Nights') . '; ';
+    $line_item_label .= t('Arrival') . ': ' . $agent->start_date->format($date_format) . ' ';
+    $line_item_label .= t('Departure') .': ' . $dd->format($date_format) . ')';
     $line_item->line_item_label = $line_item_label;
 
     $unit_info = $agent->checkAvailabilityForUnit($unit_id, $price_modifiers);
 
     // Check $unit_info to make sure we still have availbility
     if ($unit_info == ROOMS_NO_ROOMS) {
-      form_set_error('', t('We are sorry, booking unit is no longer available.'));
+      form_set_error('', t('We apologize for the inconvenience; this unit is no longer available.'));
     }
     else {
       // If available set price and create line item
@@ -101,7 +104,7 @@ function rooms_create_line_item($unit_to_book, AvailabilityAgent $agent, $bookin
       foreach ($price_modifiers as $mod) {
         $price_options[LANGUAGE_NONE][] = array(
           'name' => $mod['#name'],
-          'quantity' => 1,
+          'quantity' => $mod['#quantity'],
           'operation' => $mod['#op_type'],
           'value' => $mod['#amount'],
         );

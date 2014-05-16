@@ -73,7 +73,7 @@ class UnitPricingCalendar {
     $price = 0;
     $pricing_events = $this->getEvents($start_date, $end_date);
     foreach ($pricing_events as $event) {
-      $days = $event->diff()->d + 1;
+      $days = $event->diff()->days + 1;
       if (variable_get('rooms_price_calculation', ROOMS_PER_NIGHT) == ROOMS_PER_PERSON) {
         $children_discount_options = variable_get('rooms_children_discount_options', array());
 
@@ -117,34 +117,35 @@ class UnitPricingCalendar {
 
   /**
    * Apply price modifiers to base price
-   * @param $price
+   * @param $base_price
    * The price to modify
    *
    * @return
    * The modified price
    */
-  public function applyPriceModifiers($price) {
+  public function applyPriceModifiers($base_price) {
+    $price = $base_price;
     if (!empty($this->price_modifiers)) {
-      foreach ($this->price_modifiers as $modifiers) {
-        if ($modifiers['#type'] == ROOMS_PRICE_SINGLE_OCCUPANCY) {
-          $price -= $price * $this->unit->data['singlediscount'] / 100;
+      foreach ($this->price_modifiers as $modifier) {
+        if ($modifier['#type'] == ROOMS_PRICE_SINGLE_OCCUPANCY) {
+          $price -= $base_price * $this->unit->data['singlediscount'] / 100;
         }
-        elseif ($modifiers['#type'] == ROOMS_DYNAMIC_MODIFIER) {
-          switch ($modifiers['#op_type']) {
+        elseif ($modifier['#type'] == ROOMS_DYNAMIC_MODIFIER) {
+          switch ($modifier['#op_type']) {
             case ROOMS_ADD:
-              $price += $modifiers['#amount'];
+              $price += $modifier['#amount'] * $modifier['#quantity'];
               break;
             case ROOMS_SUB:
-              $price -= $modifiers['#amount'];
+              $price -= $modifier['#amount'] * $modifier['#quantity'];
               break;
             case ROOMS_REPLACE:
-              $price = $modifiers['#amount'];
+              $price = $modifier['#amount'];
               break;
             case ROOMS_INCREASE:
-              $price += $price * $modifiers['#amount'] / 100;
+              $price += $base_price * ($modifier['#amount'] * $modifier['#quantity']) / 100;
               break;
             case ROOMS_DECREASE:
-              $price -= $price * $modifiers['#amount'] / 100;
+              $price -= $base_price * ($modifier['#amount'] * $modifier['#quantity']) / 100;
               break;
           }
         }

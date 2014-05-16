@@ -28,6 +28,8 @@ class RoomsBookingTypeUIController extends EntityDefaultUIController {
  */
 function rooms_booking_type_form($form, &$form_state, $booking_type, $op = 'edit') {
 
+  $form['#attributes']['class'][] = 'rooms-management-form rooms-booking-type-form';
+
   if ($op == 'clone') {
     $booking_type->label .= ' (cloned)';
     $booking_type->type = '';
@@ -55,7 +57,10 @@ function rooms_booking_type_form($form, &$form_state, $booking_type, $op = 'edit
 
 
 
-  $form['actions'] = array('#type' => 'actions');
+  $form['actions'] = array(
+    '#type' => 'actions',
+    '#tree' => FALSE,
+  );
   $form['actions']['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Save Booking type'),

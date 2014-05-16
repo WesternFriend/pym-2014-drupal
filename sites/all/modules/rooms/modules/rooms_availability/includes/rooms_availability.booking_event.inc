@@ -221,13 +221,13 @@ class BookingEvent {
       $booking_id = rooms_availability_return_id($this->id);
       $booking = rooms_booking_load($booking_id);
       if ($style == ROOMS_AVAILABILITY_ADMIN_STYLE) {
-        $name = $booking->name;
+        $name = (isset($booking->name) && !empty($booking->name)) ? $booking->name : t('Booking') . ': ' . $booking->booking_id;
         $interval = $this->diff();
         if ((strlen($name) > 7) && ($interval->d < 1)) {
-          $event['title'] = substr($booking->name, 0 , 6) . '...';
+          $event['title'] = substr($name, 0 , 6) . '...';
         }
         else {
-          $event['title'] = $booking->name;
+          $event['title'] = $name;
         }
       }
       elseif ($style == ROOMS_AVAILABILITY_GENERIC_STYLE) {
@@ -254,10 +254,11 @@ class BookingEvent {
         break;
       case ($this->id < 0):
         $event['color'] = variable_get('rooms_unconfirmed_booking_color', '#8CBF62');
+        $event['title'] = variable_get('rooms_unconfirmed_booking_text', 'UNCONF');
         break;
       case ROOMS_ANON_BOOKED:
-        if ($style == 'admin') {
-          $event['color'] = variable_get('rooms_anon_booked_color', '#481600');
+        if ($style == ROOMS_AVAILABILITY_ADMIN_STYLE) {
+          $event['color'] = variable_get('rooms_anon_booking_color', '#481600');
           $event['title'] = variable_get('rooms_anon_booking_text', 'A-B');
         }
         elseif ($style == ROOMS_AVAILABILITY_GENERIC_STYLE) {

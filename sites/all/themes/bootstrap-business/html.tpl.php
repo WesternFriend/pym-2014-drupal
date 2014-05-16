@@ -4,7 +4,7 @@
   <?php print $head; ?>
   <title><?php print $head_title; ?></title>
   <?php print $styles; ?>
-
+  <link rel="icon" type="image/ico" href="favicon.ico" /> 
   <?php if (theme_get_setting('responsive_respond','bootstrap_business')): global $base_path; global $base_root; ?>
   <!-- Media Queries support for IE6-8 -->  
   <!--[if lt IE 9]>

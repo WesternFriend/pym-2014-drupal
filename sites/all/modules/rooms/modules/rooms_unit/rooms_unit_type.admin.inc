@@ -27,7 +27,9 @@ class RoomsUnitTypeUIController extends EntityDefaultUIController {
  *
  */
 function rooms_unit_type_form($form, &$form_state, $unit_type, $op = 'edit') {
-  
+
+  $form['#attributes']['class'][] = 'rooms-management-form unit-type-form';
+
   if ($op == 'clone') {
     $unit_type->label .= ' (cloned)';
     $unit_type->type = '';
@@ -58,47 +60,48 @@ function rooms_unit_type_form($form, &$form_state, $unit_type, $op = 'edit') {
 
   $form['data']['base_price'] = array(
     '#type' => 'textfield',
-    '#title' => t('Unit Base Price'),
+    '#title' => t('Unit base price'),
     '#default_value' => isset($unit_type->data['base_price']) ? $unit_type->data['base_price'] : '',
     '#size' => '5',
-    '#description' => t('Base price is per unit per night - the price you set here will be the default price for all units of this type. You may then change the default base price on a per unit basis.'),
+    '#field_suffix' => t('Per unit per night'),
+    '#description' => t('The price you set here will be the default price for all units of this type. You may then change the default base price on a per unit basis.'),
     '#maxlength' => 10,
   );
 
   $form['data']['min_sleeps'] = array(
     '#type' => 'textfield',
-    '#title' => t('Person sleeps'),
+    '#title' => t('Sleeping capacity'),
     '#default_value' => isset($unit_type->data['min_sleeps']) ? $unit_type->data['min_sleeps'] : '',
     '#size' => '5',
     '#maxlength' => 2,
-    '#field_prefix' => 'Min:',
+    '#field_prefix' => t('Minimum') . ':',
   );
 
   $form['data']['max_sleeps'] = array(
     '#type' => 'textfield',
     '#default_value' => isset($unit_type->data['max_sleeps']) ? $unit_type->data['max_sleeps'] : '',
     '#size' => '5',
-    '#description' => t('The default number of people that can sleep in units of this type.'),
+    '#description' => t('The default number of people (including adults and children) for each unit of this type.'),
     '#maxlength' => 2,
-    '#field_prefix' => 'Max:',
+    '#field_prefix' => t('Maximum') . ':',
   );
 
   $form['data']['min_children'] = array(
     '#type' => 'textfield',
-    '#title' => t('Children sleeps'),
+    '#title' => t('Child capacity'),
     '#default_value' => isset($unit_type->data['min_children']) ? $unit_type->data['min_children'] : '',
     '#size' => '5',
     '#maxlength' => 2,
-    '#field_prefix' => 'Min:',
+    '#field_prefix' => t('Minimum') . ':',
   );
 
   $form['data']['max_children'] = array(
     '#type' => 'textfield',
     '#default_value' => isset($unit_type->data['max_children']) ? $unit_type->data['max_children'] : '',
     '#size' => '5',
-    '#description' => t('The default number of childrens that can sleep in units of this type.'),
+    '#description' => t('The default number of children per unit of this type.'),
     '#maxlength' => 2,
-    '#field_prefix' => 'Max:',
+    '#field_prefix' => t('Maximum') . ':',
   );
 
   $form['data']['rooms_description_source'] = array(
@@ -112,7 +115,10 @@ function rooms_unit_type_form($form, &$form_state, $unit_type, $op = 'edit') {
     '#weight' => 3,
   );
 
-  $form['actions'] = array('#type' => 'actions');
+  $form['actions'] = array(
+    '#type' => 'actions',
+    '#tree' => FALSE,
+  );
   $form['actions']['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Save unit type'),
@@ -136,7 +142,7 @@ function rooms_unit_type_form_validate(&$form, &$form_state) {
 
   // Validate price field
   if (!empty($form_state['values']['data']['base_price']) && !is_numeric($form_state['values']['data']['base_price'])) {
-    form_set_error('data][base_price', t('%name: you must enter a numeric value for the price.', array('%name' => 'Base Price')));
+    form_set_error('data][base_price', t('%name: you must enter a numeric value for the price.', array('%name' => t('Base price'))));
   }
 
   // Validate room unit description

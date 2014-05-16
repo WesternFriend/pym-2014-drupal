@@ -466,7 +466,7 @@ function rooms_unit_type_description_source($string = '') {
  * Implements hook_menu_local_tasks_alter().
  */
 function rooms_unit_menu_local_tasks_alter(&$data, $router_item, $root_path) {
-  // Add action link 'admin/rooms/rooms/add' on 'admin/rooms/rooms'.
+  // Create an action link on the Rooms Units admin page for adding new units.
   if ($root_path == 'admin/rooms/units') {
     $item = menu_get_item('admin/rooms/units/add');
     if ($item['access']) {
@@ -508,6 +508,20 @@ function rooms_unit_form_rooms_unit_type_operation_form_alter(&$form, &$form_sta
   }
 }
 
+/**
+ * Helper function to generate a list of available unit states for select lists.
+ *
+ * @return array
+ *   Array of available unit states keyed by id.
+ */
+function rooms_unit_state_options() {
+  return array(
+    ROOMS_NOT_AVAILABLE => t('Unavailable'),
+    ROOMS_AVAILABLE => t('Available'),
+    ROOMS_ON_REQUEST => t('On Request'),
+    ROOMS_ANON_BOOKED => t('Anonymous Booking'),
+  );
+}
 
 /**
  * The class used for room entities
@@ -595,21 +609,21 @@ class RoomsUnitController extends EntityAPIController {
   public function buildContent($entity, $view_mode = 'full', $langcode = NULL, $content = array()) {
     $content = parent::buildContent($entity, $view_mode, $langcode, $content);
 
-    $content[t('state')] =  array(
-      '#markup' => t('State:') . $entity->bookable . '<br/>',
+    $content['state'] =  array(
+      '#markup' => t('State') . ': ' . $entity->bookable . '<br/>',
     );
 
-    $content[t('type')] =  array(
-      '#markup' => t('Type:') . ' ' . $entity->type . '<br/>',
+    $content['type'] =  array(
+      '#markup' => t('Type') . ': ' . $entity->type . '<br/>',
     );
 
-    $content[t('sleeps')] =  array(
-      '#markup' => t('Sleeps:') . $entity->max_sleeps . '<br/>',
+    $content['sleeps'] =  array(
+      '#markup' => t('Sleeps') . ': ' . $entity->max_sleeps . '<br/>',
     );
 
     if (isset($entity->data['bed_arrangement'])) {
-      $content[t('Bed Configuration')] = array(
-        '#markup' => t('Double Beds:') . ' ' . $entity->data['bed_arrangement']['doubles'] . '<br/>' . t('Single Beds:') . ' ' . $entity->data['bed_arrangement']['singles'] . '<br/>',
+      $content['bed_arrangement'] = array(
+        '#markup' => t('Double beds') . ': ' . $entity->data['bed_arrangement']['doubles'] . '<br/>' . t('Single beds') . ': ' . $entity->data['bed_arrangement']['singles'] . '<br/>',
       );
     }
 

@@ -6,6 +6,9 @@
  * plugin
  */
 
+define ('ROOMS_PER_NIGHT', 'rooms_per_night');
+define ('ROOMS_PER_PERSON', 'rooms_per_person');
+
 
 /**
  * Implements hook_permission().
@@ -14,7 +17,7 @@ function rooms_pricing_permission() {
   $permissions = array(
     'manage booking unit pricing' => array(
       'title' => t('manage booking unit pricing'),
-      'description' => t('Allows users to manage pricing settings for Rooms'),
+      'description' => t('Allows users to manage pricing settings for Rooms.'),
       'restrict access' => TRUE,
     ),
   );
@@ -81,52 +84,33 @@ function rooms_pricing_access($rooms_unit) {
  */
 function rooms_pricing_page(RoomsUnit $rooms_unit, $year='', $month='') {
 
-  // Basic check to avoid any uggliness
-  $year = check_plain($year);
-  $month = check_plain($month);
+  // Set the page title.
+  drupal_set_title(t('Edit @unit_name Pricing', array('@unit_name' => $rooms_unit->name)));
 
-  // If year is not set then give it the current date
-  $year = ($year == '') ? date('Y', time()) : $year;
-  $month = ($month == '') ? date('n', time()) : $month;
+  // Get the current page's URL, striped of the year and month args.
+  // This allows us to place this page anywhere, including at
+  // unit/%/pricing  or  admin/rooms/units/unit/%/pricing
+  list($url) = explode('/' . $year . '/' . $month, current_path());
 
-  // Add all the stuff we will need to show the FullCalendar
-  drupal_add_library('rooms_availability', 'rooms_fullcalendar');
-  drupal_add_js(drupal_get_path('module', 'rooms_pricing') . '/js/rooms_pricing.js');
-
-  // Inject settings in javascript that we will use
-  drupal_add_js(array('roomsPricing' => array('roomID' => $rooms_unit->unit_id)), 'setting');
-  drupal_add_js(array('roomsPricing' => array('currentMonth' => $month)), 'setting');
-  drupal_add_js(array('roomsPricing' => array('currentYear' => $year)), 'setting');
-
-  // Calculate forward and back dates for our 3-month view calendar and create links
-  $date1 = new DateTime("$year-$month-1");
-  $date2 = new DateTime("$year-$month-1");
-  $date_current = new DateTime("now");
-
-
-  $forward = $date1->add(new DateInterval('P3M'));
-  $forward_path = 'admin/rooms/units/unit/' . $rooms_unit->unit_id . '/pricing/' . $forward->format('Y') . '/' . $forward->format('n');
-  $forward_link = l(t('Forward'), $forward_path);
-
-  $backward = $date2->sub(new DateInterval('P3M'));
-  $backward_path = 'admin/rooms/units/unit/' . $rooms_unit->unit_id . '/pricing/' . $backward->format('Y') . '/' . $backward->format('n');
-  $backward_link = l(t('Back'), $backward_path);
-
-  $current_path = 'admin/rooms/units/unit/' . $rooms_unit->unit_id . '/pricing/' . $date_current->format('Y') . '/' . $date_current->format('n');
-  $current_link = l(t('Current'), $current_path);
-
-  // Send everything for theming
-  $output = theme('rooms_pricing', array('name' => $rooms_unit->name,
-                                              'type' => $rooms_unit->type,
-                                              'update_form' => drupal_get_form('update_unit_pricing_form', $rooms_unit->unit_id),
-                                              'start_year' => $year,
-                                              'start_month' => $month,
-                                              'forward_link' => $forward_link,
-                                              'backward_link' => $backward_link,
-                                              'current_link' => $current_link)
-                 );
-
-  return $output;
+  return array(
+    '#theme' => 'rooms_three_month_calendar',
+    '#url' => $url,
+    '#form' => drupal_get_form('update_unit_pricing_form', $rooms_unit->unit_id),
+    '#year' => $year,
+    '#month' => $month,
+    '#attached' => array(
+      'js' => array(
+        drupal_get_path('module', 'rooms_pricing') . '/js/rooms_pricing.js',
+        array(
+          'data' => array('roomsPricing' => array('roomID' => $rooms_unit->unit_id)),
+          'type' => 'setting',
+        ),
+      ),
+      'css' => array(
+        drupal_get_path('module', 'rooms_pricing') . '/css/rooms_pricing.css',
+      ),
+    ),
+  );
 }
 
 
@@ -135,12 +119,14 @@ function rooms_pricing_page(RoomsUnit $rooms_unit, $year='', $month='') {
  */
 function update_unit_pricing_form($form, &$form_state, $unit_id) {
 
+  $form['#attributes']['class'][] = 'rooms-management-form unit-pricing-form';
+
   $form['rooms_update_pricing'] = array(
     '#type' => 'fieldset',
-    '#title' => 'Update Pricing',
+    '#title' => t('Update Unit Pricing'),
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
-    '#description' => t('Careful this will overwrite any existing pricing info.'),
+    '#description' => t('Careful - this will overwrite any existing pricing info.'),
   );
 
   $form['rooms_update_pricing']['unit_id'] = array(
@@ -149,34 +135,22 @@ function update_unit_pricing_form($form, &$form_state, $unit_id) {
   );
 
   $form['rooms_update_pricing']['rooms_date_range'] = array(
-    '#title' => t('Date Range'),
     '#type' => 'fieldset',
-    '#collapsible' => TRUE,
-    '#collapsed' => FALSE,
   );
 
   $form['rooms_update_pricing']['rooms_date_range'] += rooms_date_range_fields();
   // Unset a js setting that is not relevant for pricing
   drupal_add_js(array('rooms' => array('roomsBookingStartDay' => 0)), 'setting');
 
-
   $form['rooms_update_pricing']['op'] = array(
-    '#title' => t('Operation'),
     '#type' => 'fieldset',
-    '#collapsible' => TRUE,
-    '#collapsed' => FALSE,
   );
 
+  $price_options = rooms_price_options_options();
   $form['rooms_update_pricing']['op']['operation'] = array(
     '#type' => 'select',
     '#title' => t('Operation'),
-    '#options' => array(
-      ROOMS_ADD => 'Add to price',
-      ROOMS_SUB => 'Subtract from price',
-      ROOMS_REPLACE => 'Replace price',
-      ROOMS_INCREASE => 'Increase price by % amount',
-      ROOMS_DECREASE => 'Decrease price by % amount',
-    ),
+    '#options' => $price_options,
     '#default_value' =>  'replace',
   );
 
@@ -185,11 +159,10 @@ function update_unit_pricing_form($form, &$form_state, $unit_id) {
     '#title' => t('Amount'),
     '#default_value' => '',
     '#size' => '5',
-    '#description' => 'Amount to apply for rule',
+    '#description' => t('Amount to apply for rule'),
     '#maxlength' => 10,
     '#required' => TRUE,
   );
-
 
   $form['rooms_update_pricing']['actions'] = array(
     '#type' => 'container',
@@ -207,7 +180,7 @@ function update_unit_pricing_form($form, &$form_state, $unit_id) {
 
   $form['rooms_update_pricing']['actions']['submit'] = array(
     '#type' => 'submit',
-    '#value' => t('Update Room Pricing'),
+    '#value' => t('Update Unit Pricing'),
     '#submit' => $submit + array('update_unit_pricing_form_submit'),
   );
 
@@ -215,7 +188,6 @@ function update_unit_pricing_form($form, &$form_state, $unit_id) {
   // is used to add validate handlers earlier.
   $form['#validate'][] = 'rooms_form_start_end_dates_validate';
   $form['#validate'][] = 'update_unit_pricing_form_validate';
-
 
   return $form;
 }
@@ -301,15 +273,3 @@ function rooms_pricing_json($unit, $start_year = '', $start_month = '', $start_d
 
 }
 
-
-
-/**
- * Implement rooms_pricing_theme().
- */
-function rooms_pricing_theme() {
-  return array(
-    'rooms_pricing' => array(
-      'template' => 'rooms_pricing'
-    )
-  );
-}

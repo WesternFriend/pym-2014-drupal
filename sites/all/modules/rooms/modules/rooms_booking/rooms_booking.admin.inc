@@ -52,7 +52,8 @@ class RoomsBookingUIController extends EntityDefaultUIController {
     // Add menu items to add each different type of room.
     foreach (rooms_booking_get_types() as $type) {
       $items[$this->path . '/add/' . $type->type] = array(
-        'title' => 'Add ' . $type->label,
+        'title' => 'Add @booking_type',
+        'title arguments' => array('@booking_type' => $type->label),
         'page callback' => 'rooms_booking_create_form_wrapper',
         'page arguments' => array($type->type),
         'access callback' => 'rooms_booking_access',
@@ -120,7 +121,10 @@ class RoomsBookingUIController extends EntityDefaultUIController {
       drupal_goto($item['href']);
     }
 
-    return theme('rooms_booking_add_list', array('content' => $content));
+    return array(
+      '#theme' => 'rooms_booking_add_list',
+      '#content' => $content,
+    );
   }
 
 }
@@ -137,6 +141,10 @@ class RoomsBookingUIController extends EntityDefaultUIController {
 function rooms_booking_form_wrapper($booking) {
   // Add the breadcrumb for the form's location.
   rooms_booking_set_breadcrumb();
+
+  // Set the page title.
+  $type = rooms_booking_get_types($booking->type);
+  drupal_set_title( t('#@booking_id - @booking_type', array('@booking_type' => $type->label, '@booking_id' => $booking->booking_id)));
 
   return drupal_get_form('rooms_booking_edit_form', $booking);
 }
@@ -176,6 +184,36 @@ function rooms_booking_delete_form_wrapper($booking) {
 
 
 /**
+ * Update "edit profile" link when value of Customer field change
+ */
+function rooms_booking_edit_profile_callback(&$form, $form_state) {
+  if (module_exists('commerce_customer')) {
+    $client = explode(':', $form_state['values']['client']);
+    
+    if (isset($client[1])) {
+      $result = db_select('field_data_commerce_customer_address')
+        ->fields('field_data_commerce_customer_address', array('entity_id'))
+        ->condition('commerce_customer_address_name_line', $client[0])
+        ->condition('entity_id', $client[1])
+        ->execute()
+        ->fetchField();
+
+      if ($result !== FALSE) {
+        $form['client']['#field_suffix'] = t('<a href="@edit-profile" class="ctools-use-modal">edit profile</a>', array('@edit-profile' => url('admin/rooms/customer-profiles/' . $client[1] . '/edit')));
+      }
+      else {
+        $form['client']['#field_suffix'] = '';
+      }
+    }
+    else {
+      $form['client']['#field_suffix'] = '';
+    }
+  }
+
+  return render($form['client']);
+}
+
+/**
  * Form callback: create or edit a booking.
  *
  * @param $booking
@@ -183,6 +221,9 @@ function rooms_booking_delete_form_wrapper($booking) {
  *     with only a booking type defined.
  */
 function rooms_booking_edit_form($form, &$form_state, $booking) {
+  $form['#attributes']['class'][] = 'rooms-management-form rooms-booking-form';
+  $form['#attached']['css'] = array(drupal_get_path('module', 'rooms_booking') . '/css/rooms_booking.css');
+
   $client = '';
 
   $currency_setting = commerce_currency_load(commerce_default_currency());
@@ -206,21 +247,36 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
     '#default_value' => $client,
     '#weight' => -1,
     '#required' => TRUE,
-    '#prefix' => '<div id="custom-wrapper">',
+    '#prefix' => '<div class="form-wrapper" id="edit-customer-wrapper">',
     '#suffix' => '</div>',
+    '#ajax' => array(
+      'callback' => 'rooms_booking_edit_profile_callback',
+      'wrapper' => 'edit-customer-wrapper',
+    ),
   );
 
   if (module_exists('commerce_customer')) {
     ctools_include('modal');
     ctools_modal_add_js();
- 
+
     $form['client']['#description'] = t('Customer profiles are saved in the <a href="@store-profile">store</a>. Search for an existing one by typing the customer name or <a href="@profile-create" class="ctools-use-modal">create a new profile</a>.', array('@store-profile' => url('admin/commerce/customer-profiles'), '@profile-create' => url('admin/rooms/add_customers')));
+
+    if (isset($booking->customer_id)) {
+      $commerce_customer_id = db_select('rooms_customers')
+                                ->fields('rooms_customers', array('commerce_customer_id'))
+                                ->condition('id', $booking->customer_id, '=')
+                                ->execute()->fetchField();
+
+      if ($commerce_customer_id != NULL) {
+        $form['client']['#field_suffix'] = t('<a href="@edit-profile" class="ctools-use-modal">edit profile</a>', array('@edit-profile' => url('admin/rooms/customer-profiles/' . $commerce_customer_id . '/edit')));
+      }
+    }
   }
 
   $form['data']['#tree'] = TRUE;
   $form['data']['group_size'] = array(
     '#type' => 'select',
-    '#title' => 'Persons',
+    '#title' => t('Guests'),
     '#options' => array(
       '1' => '1',
       '2' => '2',
@@ -234,7 +290,7 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
       '10' => '10',
     ),
     '#default_value' =>  isset($booking->data['group_size']) ? $booking->data['group_size'] : '2',
-    '#description' => t('The number of persons staying in this room.'),
+    '#description' => t('The total number of people staying in this unit (including adults and children).'),
     '#ajax' => array(
       'callback' => 'rooms_booking_group_size_ajax_callback',
       'wrapper' => 'rooms_booking_group_size_children_container'
@@ -248,10 +304,10 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
 
   $form['data']['group_size_children'] = array(
     '#type' => 'select',
-    '#title' => 'Children',
-    '#options' => range(0, $persons),
+    '#title' => t('Children'),
+    '#options' => rooms_range(0, $persons),
     '#default_value' =>  isset($booking->data['group_size_children']) ? $booking->data['group_size_children'] : '0',
-    '#description' => t('The number of children staying in this room.'),
+    '#description' => t('The number of children staying in this unit.'),
     '#prefix' => '<div id="rooms_booking_group_size_children_container">',
     '#suffix' => '</div>',
   );
@@ -265,7 +321,7 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
     );
 
     $form['data']['childrens_age'] = array(
-      '#prefix' => '<div id="rooms_booking_childrensage" class="container-inline">',
+      '#prefix' => '<div class="form-wrapper container-inline" id="rooms_booking_childrensage">',
       '#suffix' => '</div>',
     );
 
@@ -274,7 +330,7 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
         for ($t = 1; $t <= $form_state['values']['data']['group_size_children']; $t++) {
           $form['data']['childrens_age'][$t] = array(
             '#type' => 'textfield',
-            '#title' => t('Age #' . $t),
+            '#title' => t('Age of child @num', array('@num' => $t)),
             '#size' => 5,
             '#maxlength' => 5,
             '#ajax' => array(
@@ -289,7 +345,7 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
       foreach ($booking->data['childrens_age'] as $key => $age) {
         $form['data']['childrens_age'][$key] = array(
           '#type' => 'textfield',
-          '#title' => t('Age #' . $key),
+          '#title' => t('Age of child @num', array('@num' => $key)),
           '#size' => 5,
           '#maxlength' => 5,
           '#default_value' => $age,
@@ -305,7 +361,6 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
   // A fieldset to hold the date range fields
   $form['rooms_date_range'] = array(
     '#type' => 'fieldset',
-    '#title' => t('Assign Dates'),
   );
 
   $form['rooms_date_range'] = rooms_date_range_fields($form['rooms_date_range']);
@@ -321,12 +376,12 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
   $startdate = '';
   if (isset($_GET['startdate'])) {
     $startdate = (is_numeric(check_plain($_GET['startdate']))) ? check_plain($_GET['startdate']) : '';
-    if ($startdate != '') $form['rooms_date_range']['rooms_start_date']['#default_value'] = date('Y-m-d', $startdate);
+    if ($startdate != '') $form['rooms_date_range']['rooms_start_date']['#default_value'] = gmdate('Y-m-d', $startdate);
   }
   $enddate = '';
   if (isset($_GET['enddate'])) {
     $enddate = (is_numeric(check_plain($_GET['enddate']))) ? check_plain($_GET['enddate']) : '';
-    if ($enddate != '') $form['rooms_date_range']['rooms_end_date']['#default_value'] = date('Y-m-d', $enddate);
+    if ($enddate != '') $form['rooms_date_range']['rooms_end_date']['#default_value'] = gmdate('Y-m-d', $enddate);
   }
 
   $unitid = '';
@@ -339,21 +394,23 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
   // Access to availability information
   $form['get_availability'] = array(
     '#type' => 'submit',
-    '#value' => isset($booking->unit_id) ? t('Re-assign Unit') : t('Assign Room'),
+    '#value' => isset($booking->unit_id) ? t('Re-assign Unit') : t('Check availability'),
     '#submit' => array('rooms_booking_edit_form_availability_submit'),
     '#validate' => array('rooms_form_start_end_dates_validate'),
     '#ajax' => array(
       'callback' => 'rooms_booking_edit_form_availability_callback',
       'wrapper' => 'availability-wrapper',
     ),
+    '#prefix' => '<div class="form-wrapper" id="availability-button">',
+    '#suffix' => '</div>',
   );
 
   $options_list = '';
 
   // If a unit is assigned get the unit type label
   if (isset($booking->unit_id)) {
-    $type_obj = rooms_unit_type_load($booking->unit_type);
     $unit = rooms_unit_load($booking->unit_id);
+    $type_obj = rooms_unit_type_load($unit->type);
 
     if (isset($unit->rooms_booking_unit_options[LANGUAGE_NONE])) {
       foreach ($unit->rooms_booking_unit_options[LANGUAGE_NONE] as $option) {
@@ -362,31 +419,40 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
         }
       }
     }
+
+    $form['unit_id'] = array(
+      '#type' => 'hidden',
+      '#value' => $booking->unit_id
+    );
+
   }
-  $unit_selected = isset($booking->unit_id) ? t('Currently assigned unit: @unit_name / @type', array('@type' => $type_obj->label, '@unit_name' => $unit->name)) : t('No Unit assigned.');
+  $unit_selected = isset($booking->unit_id) ? t('Currently assigned unit: @unit_name / @type', array('@type' => $type_obj->label, '@unit_name' => $unit->name)) : '';
 
   if ($options_list != '') {
-    $unit_selected .= ' (Options: ' . substr($options_list, 0, strlen($options_list) - 2) . ')';
+    $unit_selected .= ' (' . t('Options') . substr($options_list, 0, strlen($options_list) - 2) . ')';
   }
   if (isset($booking->price)) {
-    $unit_selected .= '<br>Price: ' . $currency_symbol . number_format($booking->price / 100, 2, '.', '');
+    $unit_selected .= '<br>' . t('Price') . ': ' .
+    t('@currency_symbol @amount', array( // TODO: replace with a proper currency formatter
+      '@currency_symbol' => $currency_symbol,
+      '@amount' => number_format($booking->price / 100, 2, '.', ''),
+    ));
   }
 
   $form['availability_fieldset'] = array(
     '#type' => 'fieldset',
-    '#title' => 'Availability',
     '#description' => $unit_selected,
-    '#prefix' => '<div id="availability-wrapper">',
+    '#prefix' => '<div class="form-wrapper" id="availability-wrapper">',
     '#suffix' => '</div>',
   );
 
   $form['b_status'] = array(
     '#type' => 'fieldset',
-    '#title' => t('Booking Status'),
+    '#title' => t('Booking status'),
   );
   $form['b_status']['booking_status'] = array(
     '#type' => 'checkbox',
-    '#title' => 'Booking Confirmed',
+    '#title' => t('Booking Confirmed'),
     '#options' => array(
       '0' => '0',
       '1' => '1',
@@ -406,7 +472,7 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
         );
         $form['order']['order_link'] = array(
           '#type' => 'markup',
-          '#markup' => t('Order Status: @order_status', array('@order_status' => $order_states[$order->status]['title'])) . '<br>' . t('Edit <a href="@url">order</a> associated to this booking', array('@url' => url('admin/commerce/orders/' . $booking->order_id . '/edit'))),
+          '#markup' => t('Order status: @order_status', array('@order_status' => $order_states[$order->status]['title'])) . '<br>' . t('Edit <a href="@url">order</a> associated with this booking', array('@url' => url('admin/commerce/orders/' . $booking->order_id . '/edit'))),
         );
       }
     }
@@ -415,7 +481,7 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
   // If submit above pressed and we have dates we can process to assign a unit
   if (isset($form_state['show_availability_options']) || $unitid != '') {
     $room_types = rooms_unit_get_types();
-    $types = array('notype' => 'Choose Room Type');
+    $types = array('' => t('- Select -'));
     foreach ($room_types as $type) {
       $types[$type->type] = $type->label;
     }
@@ -439,10 +505,10 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
       $form_state['values']['unit_type'] = $selected;
       $form_state['input']['data']['group_size'] = ($unit->max_sleeps <= 1) ? 1 : 2;
       $form_state['input']['data']['group_size_children'] = 0;
-      $form_state['input']['rooms_start_date']['date'] = date('d/m/Y', $startdate);
-      $form_state['input']['rooms_end_date']['date'] = date('d/m/Y', $enddate);
-      $form_state['values']['rooms_start_date'] = date('Y-m-d', $startdate);
-      $form_state['values']['rooms_end_date'] = date('Y-m-d', $enddate);
+      $form_state['input']['rooms_start_date']['date'] = gmdate('d/m/Y', $startdate);
+      $form_state['input']['rooms_end_date']['date'] = gmdate('d/m/Y', $enddate);
+      $form_state['values']['rooms_start_date'] = gmdate('Y-m-d', $startdate);
+      $form_state['values']['rooms_end_date'] = gmdate('Y-m-d', $enddate);
 
       $form_state['show_availability_options'] = TRUE;
     }
@@ -459,18 +525,16 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
         'wrapper' => 'unit-wrapper',
       ),
     );
+    unset($form['unit_id']);
 
     // This is where the available untis will pop up
     $form['availability_fieldset']['unit_fieldset'] = array(
       '#type' => 'fieldset',
-      '#title' => t('Units'),
-      '#prefix' => '<div id="unit-wrapper">',
+      '#prefix' => '<div class="form-wrapper" id="unit-wrapper">',
       '#suffix' => '</div>',
     );
 
-    $form['availability_fieldset']['unit_fieldset']['instructions'] = array(
-      '#markup' => t('Choose a unit from the list of available rooms below - we only show units with availability for the dates selected.'),
-    );
+    $form['availability_fieldset']['unit_fieldset']['instructions'] = array();
 
     // If the user has selected a unit type or we already have a unit assigned
     // show all the available units of that type (including the already assign unit)
@@ -493,7 +557,7 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
       $available_units = rooms_booking_edit_form_get_rooms($search_unit_type, $start_date, $end_date, $form_state['input']['data']['group_size'], $group_size_children, $childrens_age, $booking);
       if ($available_units == 2) {
         $form['availability_fieldset']['unit_fieldset']['instructions'] = array(
-          '#markup' => t('No @search_unit_type are available', array('@search_unit_type' => $search_unit_type)),
+          '#markup' => t('No @unit_type units are available for specified party size on the chosen dates.', array('@unit_type' => $search_unit_type)),
         );
       }
       else {
@@ -502,19 +566,26 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
           $type_obj = rooms_unit_type_load($type);
           $form['availability_fieldset']['unit_fieldset']['type'] = array(
             '#type' => 'fieldset',
-            '#title' => t($type_obj->label),
+            '#title' => $type_obj->label,
+          );
+
+          $form['availability_fieldset']['unit_fieldset']['instructions'] = array(
+            '#markup' => t('The following units are available for the chosen dates; please select one.'),
           );
 
           $options = array();
           // Create elements based on type/price categorisation
           foreach ($units_per_price as $price => $units) {
             foreach ($units as $unit) {
-              $options[$unit['unit']->unit_id] = $unit['unit']->name . ' - ' . t('Cost:') . ' ' . $currency_symbol . $units[key($units)]['price'];
+              $options[$unit['unit']->unit_id] = $unit['unit']->name . ' - ' . t('Cost') . ': ' .
+                t('@currency_symbol @amount', array( // TODO: replace with a proper currency formatter
+                  '@currency_symbol' => $currency_symbol,
+                  '@amount' => $units[key($units)]['price'])
+                );
             }
           }
 
           $form['availability_fieldset']['unit_fieldset']['type']['unit_id'] = array(
-            '#title' => t('Units'),
             '#type' => 'radios',
             '#options' => $options,
             '#validated' => TRUE,
@@ -531,8 +602,7 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
 
           $form['availability_fieldset']['unit_fieldset']['options_fieldset'] = array(
             '#type' => 'fieldset',
-            '#title' => t('Options'),
-            '#prefix' => '<div id="options-wrapper">',
+            '#prefix' => '<div class="form-wrapper" id="options-wrapper">',
             '#suffix' => '</div>',
           );
 
@@ -567,7 +637,7 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
                       $form['availability_fieldset']['unit_fieldset']['options_fieldset'][strtolower(str_replace(array(':', ' '), '_', $option['name'])) . ':quantity'] = array(
                         '#type' => 'select',
                         '#title' => t('Quantity'),
-                        '#options' => range(1, $option['quantity']),
+                        '#options' => rooms_range(1, $option['quantity']),
                         '#ajax' => array(
                           'callback' => 'rooms_booking_select_unit_callback',
                           'wrapper' => 'options-wrapper',
@@ -578,7 +648,7 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
                 }
               }
             }
-            
+
             // Create Price Modifiers
 
             $price_modifiers = array();
@@ -596,7 +666,8 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
                     $price_modifiers[$option_name] = array(
                       '#type' => ROOMS_DYNAMIC_MODIFIER,
                       '#op_type' => $option['operation'],
-                      '#amount' => $option['value'] * $quantity,
+                      '#amount' => $option['value'],
+                      '#quantity' => $quantity,
                     );
                   }
                 }
@@ -610,9 +681,6 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
               '#size' => '10',
               '#required' => TRUE,
             );
-
-            $start_date = new DateTime($form_state['values']['rooms_start_date']);
-            $end_date = new DateTime($form_state['values']['rooms_end_date']);
 
             list($start_date, $end_date) = rooms_form_values_get_start_end_dates($form_state);
 
@@ -643,7 +711,7 @@ function rooms_booking_edit_form($form, &$form_state, $booking) {
 
             // When user press 'Re-assign Unit' button we don't replace price
             if (isset($form_state['triggering_element'])) {
-              if ($form_state['triggering_element']['#value'] == 'Re-assign Unit' && $form_state['triggering_element']['#name'] == 'op') {
+              if ($form_state['triggering_element']['#value'] == t('Re-assign Unit') && $form_state['triggering_element']['#name'] == 'op') {
                 $form['availability_fieldset']['unit_fieldset']['options_fieldset']['price']['#value'] = number_format($booking->price / 100, 2, '.', '');
               }
               else {
@@ -793,7 +861,7 @@ function rooms_booking_edit_form_unit_type_callback(&$form, $form_state) {
     $form['availability_fieldset']['unit_fieldset']['options_fieldset'] = array(
       '#type' => 'fieldset',
       '#title' => t('Options'),
-      '#prefix' => '<div id="options-wrapper">',
+      '#prefix' => '<div class="form-wrapper" id="options-wrapper">',
       '#suffix' => '</div>',
     );
   }
@@ -867,14 +935,18 @@ function rooms_booking_edit_form_validate(&$form, &$form_state) {
     if (isset($booking->start_date) && isset($booking->end_date)) {
       if ($input_start_date != $booking->start_date || $input_end_date != $booking->end_date) {
         if (!isset($form_state['values']['unit_id']) || !is_numeric($form_state['values']['unit_id'])) {
-          form_set_error('availability_fieldset', t('A unit must be re-assigned for this booking'));
+          form_set_error('availability_fieldset', t('A unit must be re-assigned for this booking.'));
         }
       }
     }
   }
 
-  if (!isset($form_state['values']['unit_id']) && (!isset($booking->unit_id))) {
-    form_set_error('availability_fieldset', t('A unit has not been assigned for this booking'));
+
+  // Check if unit assigned
+  if ((!isset($form_state['values']['unit_id'])) || ($form_state['values']['unit_id'] == '')) {
+    form_set_error('availability_fieldset', t('A unit has not been assigned for this booking.'));
+  } elseif ((isset($form_state['values']['unit_id'])) && ($form_state['values']['unit_id'] == '')) {
+    form_set_error('availability_fieldset', t('A unit has not been assigned for this booking.'));
   }
 
   $booking = $form_state['rooms_booking'];
@@ -890,12 +962,15 @@ function rooms_booking_edit_form_validate(&$form, &$form_state) {
         // Create a calendar
         $uc = new UnitCalendar($booking->unit_id);
 
+        $adjusted_end_date = clone($end_date);
+        $adjusted_end_date->modify('-1 day');
+
         // Create an event representing the event to remove
         $event_id = rooms_availability_assign_id($booking->booking_id, $booking->booking_status);
         $be = new BookingEvent($booking->unit_id, $event_id, $start_date, $end_date);
 
         // Check if a locked event is blocking the update
-        $states_confirmed = $uc->getStates($start_date, $end_date);
+        $states_confirmed = $uc->getStates($start_date, $adjusted_end_date);
 
         $valid_states = array_keys(array_filter(variable_get('rooms_valid_availability_states', array(ROOMS_AVAILABLE => ROOMS_AVAILABLE, ROOMS_ON_REQUEST => ROOMS_ON_REQUEST))));
         $valid_states = array_merge($valid_states, array(ROOMS_UNCONFIRMED_BOOKINGS, $be->id));
@@ -909,11 +984,11 @@ function rooms_booking_edit_form_validate(&$form, &$form_state) {
           $form['rooms_date_range']['rooms_start_date']['date']['#value'] = $date1->format($form['rooms_date_range']['rooms_start_date']['#date_format']);
           $form['rooms_date_range']['rooms_end_date']['date']['#value'] = $date2->format($form['rooms_date_range']['rooms_end_date']['#date_format']);
 
-          form_set_error('date_range', t('Could not update calendar because a locked event is blocking the update - you need to unlock any locked events in that period'));
+          form_set_error('date_range', t('Could not update calendar because a locked event is blocking the update - you need to unlock any locked events in that period.'));
         }
 
-        // Check if this booking overlap with an uncofirmed booking
-        $states_unconfirmed = $uc->getStates($start_date, $end_date, TRUE);
+        // Check if this booking overlap with an unconfirmed booking
+        $states_unconfirmed = $uc->getStates($start_date, $adjusted_end_date, TRUE);
 
         $valid_states = array_keys(array_filter(variable_get('rooms_valid_availability_states', array(ROOMS_AVAILABLE => ROOMS_AVAILABLE, ROOMS_ON_REQUEST => ROOMS_ON_REQUEST))));
         $valid_states = array_merge($valid_states, array($be->id));
@@ -922,13 +997,13 @@ function rooms_booking_edit_form_validate(&$form, &$form_state) {
 
         if (count($state_diff_unconfirmed) > 0) {
           $booking_id = rooms_availability_return_id(array_pop($state_diff_unconfirmed));
-          form_set_error('date_range', t('Change of dates leads to an overlap with an uncofirmed booking, please resolve issue with booking !booking_link first.', array('!booking_link' => l($booking_id, 'admin/rooms/bookings/booking/' . $booking_id . '/edit'))));
+          form_set_error('date_range', t('Change of dates leads to an overlap with an unconfirmed booking, please resolve issue with booking !booking_link first.', array('!booking_link' => l($booking_id, 'admin/rooms/bookings/booking/' . $booking_id . '/edit'))));
         }
       }
     }
   }
 
-  // For new bookings check if the owner has an oustanding order, don't run on AJAX
+  // For new bookings check if the owner has an outstanding order, don't run on AJAX
   // requests due this could cause message duplication
   if (!isset($booking->customer_id) && strpos(request_uri(), 'system/ajax') === FALSE) {
     $customer_name = $form_state['input']['client'];
@@ -938,7 +1013,7 @@ function rooms_booking_edit_form_validate(&$form, &$form_state) {
     // of commerce_payment module and all the orders must have a transaction
     // history to have a reliable balance.
     $complete_statuses = array('complete', 'rooms_unit_confirmed');
-    // determine the commerce order statuses that identify an oustanding order
+    // determine the commerce order statuses that identify an outstanding order
     $incomplete_statuses = array_diff(array_keys(commerce_order_statuses()), $complete_statuses);
     $orders = commerce_order_load_multiple(array(), array('uid' => $commerce_customer_id, 'status' => $incomplete_statuses));
 
@@ -950,13 +1025,13 @@ function rooms_booking_edit_form_validate(&$form, &$form_state) {
     // in case of pending orders alert the admin
     if ($orders) {
       foreach ($orders['commerce_order'] as $order) {
-        $order_links[] = l("Order #{$order->order_id}", "admin/commerce/orders/{$order->order_id}/edit");
+        $order_links[] = l(t('Order #@num', array('@num' => $order->order_id)), "admin/commerce/orders/{$order->order_id}/edit");
       }
       $message_params = array(
-        '!customer_name' => $customer_name,
+        '!customer_name' => check_plain($customer_name),
         '!order_links' => theme('item_list', array('items' => $order_links)),
       );
-      drupal_set_message(t('The customer !customer_name has an oustanding order: !order_links', $message_params), 'warning');
+      drupal_set_message(t('The customer !customer_name has an outstanding order: !order_links', $message_params), 'warning');
     }
   }
 
@@ -964,7 +1039,7 @@ function rooms_booking_edit_form_validate(&$form, &$form_state) {
   $client_name = $client[0];
   $commerce_customer_id = rooms_booking_find_customer_by_name($client_name);
   if ($commerce_customer_id === FALSE) {
-    form_set_error('client', t('Enter a valid customer!'));
+    form_set_error('client', t('Enter a valid customer.'));
   }
 
   //Notify field widgets to validate their data.
@@ -1086,7 +1161,7 @@ function rooms_booking_edit_form_submit(&$form, &$form_state) {
     if (variable_get('rooms_manually_booking_create_order', '1') == '1') {
       $booking_parameters = array('adults' => $form_state['values']['data']['group_size'], 'children' => $form_state['values']['data']['group_size_children']);
 
-      $order = rooms_booking_create_order($start_date, $end_date, $booking_parameters, $unit_object, $booking);
+      $order = rooms_booking_create_order($start_date, $end_date, $booking_parameters, $unit_object, $booking, $commerce_customer_id);
 
       $booking->order_id = $order->order_number;
 
@@ -1098,10 +1173,10 @@ function rooms_booking_edit_form_submit(&$form, &$form_state) {
   // We have a unit defined so lets block availability there
   if ($unit != 0) {
     if ($booking->rooms_av_update == ROOMS_UPDATED) {
-      drupal_set_message(t('Room Availability Updated'));
+      drupal_set_message(t('Unit availability has been updated.'));
     }
     else {
-      drupal_set_message(t('Room Availability could not be updated'), 'error');
+      drupal_set_message(t('Unit availability could not be updated.'), 'error');
     }
   }
 
@@ -1126,8 +1201,12 @@ function rooms_booking_form_submit_delete(&$form, &$form_state) {
  *   end date.
  * @param array $booking_parameters
  *   Specify the people we are looking to accommodate.
+ * @param $unit_object
+ * @param $booking
+ * @param $profile_id
+ * @return mixed
  */
-function rooms_booking_create_order($start_date, $end_date, $booking_parameters, $unit_object, $booking) {
+function rooms_booking_create_order($start_date, $end_date, $booking_parameters, $unit_object, $booking, $profile_id) {
   global $user;
 
   module_load_include('inc', 'rooms_booking_manager', 'rooms_booking_manager.commerce');
@@ -1136,6 +1215,21 @@ function rooms_booking_create_order($start_date, $end_date, $booking_parameters,
   commerce_order_save($order);
 
   $price_modifiers = array();
+  // Convert Price options to Price modifiers
+  if (isset($unit_object->rooms_booking_unit_options[LANGUAGE_NONE])) {
+    foreach ($unit_object->rooms_booking_unit_options[LANGUAGE_NONE] as $option) {
+      $opt_name = strtolower(str_replace(array(':', ' '), '_', $option['name']));
+      if (isset($booking->$opt_name) && $booking->$opt_name) {
+        $price_modifiers[$opt_name] = array(
+          '#name' => $option['name'],
+          '#type' => ROOMS_DYNAMIC_MODIFIER,
+          '#op_type' => $option['operation'],
+          '#amount' => $option['value'],
+          '#quantity' => $option['quantity'],
+        );
+      }
+    }
+  }
 
   $agent = new AvailabilityAgent($start_date, $end_date, $booking_parameters, 1, array());
   $agent->setValidStates(variable_get('rooms_valid_availability_states', array(ROOMS_AVAILABLE, ROOMS_ON_REQUEST)));
@@ -1158,6 +1252,16 @@ function rooms_booking_create_order($start_date, $end_date, $booking_parameters,
   // Add the line item to the order
   $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
   $order_wrapper->commerce_line_items[] = $line_item;
+
+  // Add customer profile id to store billing information
+  $profile_object = array(
+    'und' => array(
+      array('profile_id' => $profile_id,
+      ),
+    ),
+  );
+
+  $order->commerce_customer_billing = $profile_object;
 
   // Save the order again to update its line item reference field
   commerce_order_save($order);
@@ -1230,7 +1334,6 @@ function rooms_booking_add_page() {
  */
 function theme_rooms_booking_add_list($variables) {
   $content = $variables['content'];
-  $output = '';
   if ($content) {
     $output = '<dl class="booking-type-list">';
     foreach ($content as $item) {
